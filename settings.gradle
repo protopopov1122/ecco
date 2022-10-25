@@ -5,6 +5,7 @@ include 'service'
 include 'cli'
 include 'gui'
 include 'web'
+include 'lsp'
 
 //include 'storage-neo4j'
 
@@ -24,6 +25,7 @@ project(':service').projectDir = file('service')
 project(':cli').projectDir = file('cli')
 project(':gui').projectDir = file('gui')
 project(':web').projectDir = file('web')
+project(':lsp').projectDir = file('lsp')
 
 //project(':storage-neo4j').projectDir = file('storage/neo4j')
 
