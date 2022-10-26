@@ -1,75 +1,38 @@
 plugins {
 	id 'application'
-	//id 'com.palantir.docker' version '0.30.0'
 }
 
 application {
-	mainClassName = "at.jku.isse.ecco.lsp.EccoLsp"
+	mainClassName = "at.jku.isse.ecco.lsp.launcher.StdioLauncher"
 	applicationDefaultJvmArgs = ["-Xss1024m", "-Xmx8g"]
-}
-
-dependencies {
-	implementation 'org.graphstream:gs-core:2.0'
-	implementation 'org.graphstream:gs-algo:2.0'
-
-	implementation project(':ecco-service')
-	implementation files('../adapter/java-patched/at.jku.cdl.ecco.adapter.java-patched.jar')
-
-	runtimeOnly project(':ecco-adapter-file')
-	runtimeOnly project(':ecco-adapter-text')
-	runtimeOnly project(':ecco-adapter-image')
-	runtimeOnly project(':ecco-adapter-java')
-	runtimeOnly project(':ecco-adapter-lilypond')
-
-
-	testRuntimeOnly project(':ecco-adapter-file')
-	testRuntimeOnly project(':ecco-adapter-text')
-	testRuntimeOnly project(':ecco-adapter-image')
-	testRuntimeOnly project(':ecco-adapter-challenge')
-	testRuntimeOnly project(':ecco-adapter-cpp')
-	testRuntimeOnly project(':ecco-adapter-runtime')
-}
-
-ospackage {
-	summary 'LSP (Language Server Protocol) implementation for ECCO.'
-	packageDescription 'This package provides an LSP (Language Server Protocol) implementation for ECCO.'
-
-	requires('ecco-base', version, EQUAL)
-	requires('ecco-service', version, EQUAL)
-
-	requires('javapackages-tools')
-
-	into('/usr/bin/') {
-		from(project.file('ecco-lsp')) {
-			addParentDirs false
-			into ''
-		}
-	}
-}
-
-linuxZip {
-	into(archiveName - ('.' + archiveExtension)) {
-		from 'ecco-lsp'
-	}
-}
-
-sourcesZip {
-	include 'ecco-lsp'
-	include 'ecco-lsp.bat'
-}
-
-windowsZip {
-	into(archiveName - ('.' + archiveExtension)) {
-		from 'ecco-lsp.bat'
-	}
-}
-
-task copyScripts(type: Copy) {
-	from 'ecco-lsp', 'ecco-lsp.bat'
-	into project.file('build/bundle/')
 }
 
 repositories {
 	mavenCentral()
 }
-bundle.dependsOn += copyScripts
+
+dependencies {
+	implementation project(':ecco-service')
+	implementation 'org.eclipse.lsp4j:org.eclipse.lsp4j:0.17.0'
+
+	runtimeOnly project(':ecco-adapter-file')
+	runtimeOnly project(':ecco-adapter-text')
+	runtimeOnly project(':ecco-adapter-image')
+}
+
+jar {
+	manifest {
+		attributes "Main-Class": "at.jku.isse.ecco.lsp.launcher.StdioLauncher"
+	}
+
+	from {
+		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+	} {
+		exclude "META-INF/*.SF"
+		exclude "META-INF/*.DSA"
+		exclude "META-INF/*.RSA"
+	}
+
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
