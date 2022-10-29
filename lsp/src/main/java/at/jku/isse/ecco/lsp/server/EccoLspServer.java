@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class EccoLspServer implements LanguageServer, LanguageClientAware {
@@ -22,15 +23,17 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
     private LanguageClient languageClient;
     private int exitCode;
     private EccoService eccoService;
-    private Logger log;
+    private Logger logger;
 
-    public EccoLspServer(Logger log) {
-        this.textDocumentService = null;
-        this.workspaceService = null;
+    public EccoLspServer(Logger logger) {
         this.languageClient = null;
         this.exitCode = -1;
         this.eccoService = null;
-        this.log = log;
+        this.logger = logger;
+
+        logger.fine("Instantiating LSP services");
+        this.textDocumentService = new EccoTextDocumentService(this);
+        this.workspaceService = new EccoWorkspaceService(this);
     }
 
     public EccoService getEccoService() {
@@ -42,7 +45,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
     }
 
     public Logger getLogger() {
-        return this.log;
+        return this.logger;
     }
 
     @Override
@@ -52,7 +55,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
 
     @Override
     public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
-        this.getLogger().info("Starting ECCO LSP server initialization");
+        logger.info("Starting ECCO LSP server initialization");
 
         final List<WorkspaceFolder> workspaceFolders = params.getWorkspaceFolders();
         if (workspaceFolders != null && !workspaceFolders.isEmpty()) {
@@ -63,21 +66,29 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
             } catch (Throwable e) {
                 return CompletableFuture.failedFuture(e);
             }
-            this.getLogger().info("Initializing ECCO service in " + workspaceFolderPath.toString());
+            this.getLogger().info("Instantiating ECCO service in " + workspaceFolderPath.toString());
 
             this.eccoService = new EccoService(workspaceFolderPath);
         } else {
-            this.getLogger().severe("Unable to detect workspace folder in initialization parameters");
+            logger.severe("Unable to detect workspace folder in initialization parameters");
             ResponseError error = new ResponseError(ResponseErrorCode.InvalidParams, "Ecco LSP server initialization expects non-empty workspace", null);
             return CompletableFuture.failedFuture(new ResponseErrorException(error));
         }
 
-        this.getLogger().fine("Instantiating LSP services");
-        this.textDocumentService = new EccoTextDocumentService(this);
-        this.workspaceService = new EccoWorkspaceService(this);
+        try {
+            logger.fine("Opening ECCO repository");
+            this.eccoService.open();
+        } catch (Throwable ex) {
+            logger.log(Level.SEVERE, "Opening ECCO repository failed with an exception", ex);
+            ResponseError error = new ResponseError(ResponseErrorCode.InternalError, "Opening ECCO repository failed", null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
+        }
 
-        this.getLogger().fine("Instantiating LSP initialize result");
+        logger.fine("Instantiating LSP initialize result");
         InitializeResult result = new InitializeResult(new ServerCapabilities());
+        result.getCapabilities().setTextDocumentSync(TextDocumentSyncKind.Full);
+        result.getCapabilities().setDocumentSymbolProvider(new DocumentSymbolOptions());
+        result.getCapabilities().setWorkspaceSymbolProvider(new WorkspaceSymbolOptions(true));
         return CompletableFuture.completedFuture(result);
     }
 
