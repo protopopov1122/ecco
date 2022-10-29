@@ -14,8 +14,9 @@ import java.util.logging.SimpleFormatter;
 public class StdioLauncher {
     public static void main(String[] args) throws ExecutionException, InterruptedException, IOException {
         Logger log = Logger.getLogger("lsp-server");
-        if (args.length > 0) {
-            FileHandler handler = new FileHandler(args[0]);
+        String logFilepath = System.getenv("ECCO_LSP_SERVER_LOG");
+        if (logFilepath != null && !logFilepath.isEmpty()) {
+            FileHandler handler = new FileHandler(logFilepath);
             log.addHandler(handler);
             handler.setFormatter(new SimpleFormatter());
         }
