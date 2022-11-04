@@ -6,14 +6,11 @@ import org.eclipse.lsp4j.services.LanguageClient;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.FileHandler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
+import java.util.logging.*;
 
 public class StdioLauncher {
     public static void main(String[] args) throws ExecutionException, InterruptedException, IOException {
-        Logger log = Logger.getLogger("lsp-server");
+        Logger log = Logger.getLogger(EccoLspServer.class.getName());
         String logFilepath = System.getenv("ECCO_LSP_SERVER_LOG");
         if (logFilepath != null && !logFilepath.isEmpty()) {
             FileHandler handler = new FileHandler(logFilepath);

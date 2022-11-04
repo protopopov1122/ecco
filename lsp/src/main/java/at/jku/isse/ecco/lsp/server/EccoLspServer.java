@@ -95,6 +95,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
     @Override
     public CompletableFuture<Object> shutdown() {
         this.getLogger().fine("Shutdown requested");
+        this.eccoService.close();
         this.exitCode = 0;
         return CompletableFuture.supplyAsync(Object::new);
     }
