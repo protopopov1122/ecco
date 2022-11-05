@@ -1,10 +1,10 @@
 package at.jku.isse.ecco.lsp.domain;
 
 import at.jku.isse.ecco.feature.FeatureRevision;
+import at.jku.isse.ecco.lsp.util.Positions;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
 
-import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -21,7 +21,7 @@ public interface DocumentFeature {
             return Optional.empty();
         }
 
-        final Comparator<Position> positionComparator = new PositionComparator();
+        final Comparator<Position> positionComparator = new Positions.PositionComparator();
         return ranges.stream().reduce((accumulator, range) -> {
             final Position accumulatorStart = accumulator.getStart();
             final Position accumulatorEnd = accumulator.getEnd();

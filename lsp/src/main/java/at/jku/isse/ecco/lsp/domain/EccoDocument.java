@@ -8,9 +8,9 @@ import java.util.List;
 
 public class EccoDocument implements Document {
 
-    private Path documentPath;
+    private final Path documentPath;
 
-    private RootNode rootNode;
+    private final RootNode rootNode;
 
     public EccoDocument(Path documentPath, RootNode rootNode) {
         this.documentPath = documentPath;
@@ -32,7 +32,7 @@ public class EccoDocument implements Document {
         return this.getDocumentPath().toString();
     }
 
-    public static EccoDocument load(EccoService eccoService, Path documentPath) {
+    public static EccoDocument load(final EccoService eccoService, final Path documentPath) {
         final RootNode documentRootNode = eccoService.map(List.of(documentPath));
         return new EccoDocument(documentPath, documentRootNode);
     }

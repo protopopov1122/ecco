@@ -1,7 +1,6 @@
 package at.jku.isse.ecco.lsp.domain;
 
 import at.jku.isse.ecco.EccoException;
-import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.core.Association;
 import at.jku.isse.ecco.feature.FeatureRevision;
 import at.jku.isse.ecco.lsp.util.Nodes;
@@ -10,11 +9,8 @@ import at.jku.isse.ecco.module.Condition;
 import at.jku.isse.ecco.module.Module;
 import at.jku.isse.ecco.module.ModuleRevision;
 import at.jku.isse.ecco.tree.Node;
-import at.jku.isse.ecco.tree.RootNode;
-import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
 
-import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,7 +21,7 @@ public class EccoDocumentFeature implements DocumentFeature {
     private final Set<Node> nodes;
     private List<Range> ranges;
 
-    public EccoDocumentFeature(Document document, FeatureRevision featureRevision, Collection<? extends Node> nodes) {
+    public EccoDocumentFeature(final Document document, final FeatureRevision featureRevision, final Collection<? extends Node> nodes) {
         this.document = document;
         this.featureRevision = featureRevision;
         this.nodes = Set.copyOf(nodes);
@@ -58,7 +54,7 @@ public class EccoDocumentFeature implements DocumentFeature {
         this.ranges = Positions.extractNodeRanges(this.nodes);
     }
 
-    public static Map<FeatureRevision, DocumentFeature> from(Document document) {
+    public static Map<FeatureRevision, DocumentFeature> from(final Document document) {
         final Map<FeatureRevision, Set<Node>> featureRevisionSetMap = new HashMap<>();
 
         document.getRootNode().traverse(node -> {
@@ -79,10 +75,10 @@ public class EccoDocumentFeature implements DocumentFeature {
 
             conditionModules.values()
                     .stream()
-                    .flatMap(moduleRevisions -> moduleRevisions.stream())
+                    .flatMap(Collection<ModuleRevision>::stream)
                     .flatMap(moduleRevision -> Arrays.stream(moduleRevision.getPos()))
                     .forEach(featureRevision -> {
-                        Set<Node> nodes = null;
+                        Set<Node> nodes;
                         if (featureRevisionSetMap.containsKey(featureRevision)) {
                             nodes = featureRevisionSetMap.get(featureRevision);
                         } else {

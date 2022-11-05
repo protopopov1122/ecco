@@ -7,15 +7,14 @@ import at.jku.isse.ecco.tree.Node;
 import java.util.Optional;
 
 public class Nodes {
-    public static final String MAPPED = "mapped";
 
-    public static Optional<Association> getMappedNodeAssociation(Node node) {
+    public static Optional<Association> getMappedNodeAssociation(final Node node) {
         final Artifact<?> artifact = node.getArtifact();
-        if (artifact == null || !artifact.getProperties().containsKey(MAPPED)) {
+        if (artifact == null || !artifact.getProperties().containsKey(Properties.MAPPED)) {
             return Optional.empty();
         }
 
-        final Artifact<?> mappedArtifact = (Artifact<?>) artifact.getProperties().get(MAPPED);
+        final Artifact<?> mappedArtifact = (Artifact<?>) artifact.getProperties().get(Properties.MAPPED);
         if (mappedArtifact == null) {
             return Optional.empty();
         }

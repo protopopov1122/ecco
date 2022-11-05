@@ -18,14 +18,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class EccoLspServer implements LanguageServer, LanguageClientAware {
-    private TextDocumentService textDocumentService;
-    private WorkspaceService workspaceService;
+    private final TextDocumentService textDocumentService;
+    private final WorkspaceService workspaceService;
     private LanguageClient languageClient;
     private int exitCode;
     private EccoService eccoService;
-    private Logger logger;
+    private final Logger logger;
 
-    public EccoLspServer(Logger logger) {
+    public EccoLspServer(final Logger logger) {
         this.languageClient = null;
         this.exitCode = -1;
         this.eccoService = null;
@@ -49,12 +49,12 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
     }
 
     @Override
-    public void connect(LanguageClient client) {
+    public void connect(final LanguageClient client) {
         this.languageClient = client;
     }
 
     @Override
-    public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
+    public CompletableFuture<InitializeResult> initialize(final InitializeParams params) {
         logger.info("Starting ECCO LSP server initialization");
 
         final List<WorkspaceFolder> workspaceFolders = params.getWorkspaceFolders();
@@ -66,7 +66,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
             } catch (Throwable e) {
                 return CompletableFuture.failedFuture(e);
             }
-            this.getLogger().info("Instantiating ECCO service in " + workspaceFolderPath.toString());
+            this.getLogger().info("Instantiating ECCO service in " + workspaceFolderPath);
 
             this.eccoService = new EccoService(workspaceFolderPath);
         } else {

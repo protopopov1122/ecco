@@ -1,7 +1,5 @@
 package at.jku.isse.ecco.lsp.domain;
 
-import at.jku.isse.ecco.EccoException;
-import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.core.Association;
 import at.jku.isse.ecco.lsp.util.Nodes;
 import at.jku.isse.ecco.lsp.util.Positions;
@@ -19,7 +17,7 @@ public interface Document {
     Path getDocumentPath();
     RootNode getRootNode();
 
-    default Set<Node> getNodesAt(Position position) {
+    default Set<Node> getNodesAt(final Position position) {
         final Set<Node> nodes = new HashSet<>();
         this.getRootNode().traverse(node -> {
             final Optional<Range> nodeRange = Positions.extractNodeRange(node);
@@ -35,7 +33,7 @@ public interface Document {
         return nodes;
     }
 
-    default Set<Association> getAssociationsOf(Collection<? extends Node> nodes) {
+    default Set<Association> getAssociationsOf(final Collection<? extends Node> nodes) {
         final Set<Association> associations = new HashSet<>();
         this.getRootNode().traverse(node -> {
             if (!nodes.contains(node)) {
@@ -43,22 +41,20 @@ public interface Document {
             }
 
             final Optional<Association> association = Nodes.getMappedNodeAssociation(node);
-            if (!association.isEmpty()) {
-                associations.add(association.get());
-            }
+            association.ifPresent(associations::add);
         });
 
         return associations;
     }
 
-    default Set<Node> getNodesFrom(Collection<? extends Association> associations) {
+    default Set<Node> getNodesFrom(final Collection<? extends Association> associations) {
         final Set<String> associationIds = associations.stream()
-                .map(association -> association.getId())
+                .map(Association::getId)
                 .collect(Collectors.toSet());
         final Set<Node> nodes = new HashSet<>();
         this.getRootNode().traverse(node -> {
             final Optional<Association> association = Nodes.getMappedNodeAssociation(node);
-            if (!association.isEmpty() && associationIds.contains(association.get().getId())) {
+            if (association.isPresent() && associationIds.contains(association.get().getId())) {
                 nodes.add(node);
             }
         });
