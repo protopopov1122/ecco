@@ -7,6 +7,8 @@ import org.eclipse.lsp4j.util.Ranges;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class Positions {
 
@@ -59,11 +61,91 @@ public class Positions {
                 (positionLine > startLine && positionLine == endLine && positionCharacter <= endCharacter);
     }
 
+    public static Optional<Range> rangesMerge(final Range r1, final Range r2) {
+        final Comparator<Position> positionComparator = PositionComparator.Instance;
+
+        if (positionComparator.compare(r1.getStart(), r2.getStart()) <= 0 &&
+            positionComparator.compare(r1.getEnd(), r2.getEnd()) >= 0) {
+            return Optional.of(r1);
+        }
+
+        if (positionComparator.compare(r1.getStart(), r2.getStart()) >= 0 &&
+            positionComparator.compare(r1.getEnd(), r2.getEnd()) <= 0) {
+            return Optional.of(r2);
+        }
+
+        if (positionComparator.compare(r1.getStart(), r2.getStart()) > 0) {
+            return rangesMerge(r2, r1);
+        }
+
+        if (positionComparator.compare(r1.getEnd(), r2.getStart()) == 0) {
+            return Optional.of(new Range(r1.getStart(), r2.getEnd()));
+        }
+
+        if (r1.getEnd().getLine() == r2.getStart().getLine() &&
+            r1.getEnd().getCharacter() + 1 == r2.getStart().getCharacter()) {
+            return Optional.of(new Range(r1.getStart(), r2.getEnd()));
+        }
+
+        if (r1.getEnd().getLine() + 1 == r2.getStart().getLine() &&
+            r1.getEnd().getCharacter() == LINE_END_CHARACTER_NUM &&
+            r2.getStart().getCharacter() == LINE_START_CHARACTER_NUM) {
+            return Optional.of(new Range(r1.getStart(), r2.getEnd()));
+        }
+
+        if (positionComparator.compare(r1.getEnd(), r2.getStart()) >= 0) {
+            return Optional.of(new Range(r1.getStart(), r2.getEnd()));
+        }
+
+        return Optional.empty();
+    }
+
+    public static List<Range> rangesMerge(final Collection<? extends Range> ranges) {
+        List<Range> merged = new ArrayList<>();
+        ranges.stream()
+            .sorted((Comparator<Range>) (r1, r2) -> PositionComparator.Instance.compare(r1.getStart(), r2.getStart()))
+            .forEach(range -> {
+                if (merged.isEmpty()) {
+                    merged.add(range);
+                } else {
+                    final int tailIndex = merged.size() - 1;
+                    final Range tail = merged.get(tailIndex);
+                    final Optional<Range> mergedTail = rangesMerge(tail, range);
+                    if (mergedTail.isPresent()) {
+                        merged.set(tailIndex, mergedTail.get());
+                    } else {
+                        merged.add(range);
+                    }
+                }
+            });
+        return merged;
+    }
+
     public static List<Range> extractNodeRanges(final Collection<? extends Node> nodes) {
         return nodes.stream()
                 .map(Positions::extractNodeRange)
                 .filter(Optional<Range>::isPresent)
                 .map(Optional<Range>::get)
+                .collect(Collectors.toList());
+    }
+
+    public static List<Range> rangeSplitLines(final Range range) {
+        return IntStream.range(range.getStart().getLine(), range.getEnd().getLine() + 1)
+                .mapToObj(line -> {
+                    if (line == range.getStart().getLine()) {
+                        return new Range(
+                                new Position(line, range.getStart().getCharacter()),
+                                new Position(line, LINE_END_CHARACTER_NUM));
+                    } else if (line == range.getEnd().getLine()) {
+                        return new Range(
+                                new Position(line, LINE_START_CHARACTER_NUM),
+                                new Position(line, range.getEnd().getCharacter()));
+                    } else {
+                        return new Range(
+                                new Position(line, LINE_START_CHARACTER_NUM),
+                                new Position(line, LINE_END_CHARACTER_NUM));
+                    }
+                })
                 .collect(Collectors.toList());
     }
 
@@ -79,5 +161,7 @@ public class Positions {
                 return 1;
             }
         }
+
+        public static final Comparator<Position> Instance = new PositionComparator();
     }
 }

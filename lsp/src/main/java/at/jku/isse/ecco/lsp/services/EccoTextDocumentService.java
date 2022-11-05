@@ -87,6 +87,7 @@ public class EccoTextDocumentService implements TextDocumentService {
         }
     }
 
+    @Override
     public CompletableFuture<List<? extends DocumentHighlight>> documentHighlight(final DocumentHighlightParams params) {
         try {
             logger.fine("Requested document highlights of " + params.getTextDocument().getUri());
@@ -103,7 +104,8 @@ public class EccoTextDocumentService implements TextDocumentService {
             final Set<Node> nodesAtPosition = document.getNodesAt(highlightPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
             final Set<Node> nodes = document.getNodesFrom(associations);
-            final List<Range> nodeRanges = Positions.extractNodeRanges(nodes);
+            final List<Range> nodeRanges = Positions.rangesMerge(Positions.extractNodeRanges(nodes));
+            logger.finer("Highlight ranges " + nodeRanges);
 
             final List<? extends DocumentHighlight> highlights = nodeRanges.stream()
                     .map(nodeRange -> new DocumentHighlight(nodeRange, DocumentHighlightKind.Read))
@@ -116,6 +118,7 @@ public class EccoTextDocumentService implements TextDocumentService {
         }
     }
 
+    @Override
     public CompletableFuture<Hover> hover(final HoverParams params) {
 
         try {
@@ -136,7 +139,7 @@ public class EccoTextDocumentService implements TextDocumentService {
                     .map(Association::computeCondition)
                     .map(Condition::toString)
                     .collect(Collectors.joining("\n"));
-            final Comparator<Position> positionComparator = new Positions.PositionComparator();
+            final Comparator<Position> positionComparator = Positions.PositionComparator.Instance;
             final Range hoverRange = nodesAtPosition.stream()
                     .map(node -> Positions.extractNodeRange(node).get())
                     .reduce(new Range(hoverPosition, hoverPosition), (accumulator, range) -> {
@@ -158,6 +161,7 @@ public class EccoTextDocumentService implements TextDocumentService {
         }
     }
 
+    @Override
     public CompletableFuture<List<ColorInformation>> documentColor(final DocumentColorParams params) {
         try {
             logger.fine("Requested document colors of " + params.getTextDocument().getUri());
@@ -168,12 +172,10 @@ public class EccoTextDocumentService implements TextDocumentService {
 
             final Document document = EccoDocument.load(eccoService, documentInRepoPath);
 
-            final List<ColorInformation> colorInformations = new ArrayList<>();
+
+            final Map<Association, List<Range>> associationRanges = new HashMap<>();
             document.getRootNode().traverse(node -> {
-                final Optional<Range> range = Positions.extractNodeStart(node)
-                        .map(startPosition -> new Range(
-                                startPosition,
-                                new Position(startPosition.getLine(), startPosition.getCharacter() + 1)));
+                final Optional<Range> range = Positions.extractNodeRange(node);
                 if (range.isEmpty()) {
                     return;
                 }
@@ -183,17 +185,36 @@ public class EccoTextDocumentService implements TextDocumentService {
                     return;
                 }
 
-                final int associationHash = association.get().getAssociationString().hashCode();
-                final Color associationColor = new Color(
-                        ((associationHash >> 8) & 0xff) / 255.0,
-                        ((associationHash >> 16) & 0xff) / 255.0,
-                        ((associationHash >> 24) & 0xff) / 255.0,
-                        1.0);
-
-                colorInformations.add(new ColorInformation(range.get(), associationColor));
+                List<Range> ranges;
+                if (associationRanges.containsKey(association.get())) {
+                    ranges = associationRanges.get(association.get());
+                } else {
+                    ranges = new ArrayList<>();
+                    associationRanges.put(association.get(), ranges);
+                }
+                ranges.add(range.get());
             });
 
-            return CompletableFuture.completedFuture(colorInformations);
+            final List<ColorInformation> colorInformation = associationRanges.entrySet().stream()
+                    .flatMap(associationListEntry -> {
+                        final int associationHash = associationListEntry.getKey().getAssociationString().hashCode();
+                        final Color associationColor = new Color(
+                                ((associationHash >> 8) & 0xff) / 255.0,
+                                ((associationHash >> 16) & 0xff) / 255.0,
+                                ((associationHash >> 24) & 0xff) / 255.0,
+                                1.0);
+
+                        return Positions.rangesMerge(associationListEntry.getValue()).stream()
+                                .flatMap(range -> Positions.rangeSplitLines(range).stream())
+                                .map(range -> new Range(
+                                        range.getStart(),
+                                        new Position(range.getStart().getLine(), range.getStart().getCharacter() + 1)
+                                ))
+                                .map(range -> new ColorInformation(range, associationColor));
+                    })
+                    .collect(Collectors.toList());
+
+            return CompletableFuture.completedFuture(colorInformation);
         }  catch (Throwable ex) {
             logger.severe(ex.getMessage() + "\t" + Arrays.toString(ex.getStackTrace()));
             final ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
@@ -201,6 +222,7 @@ public class EccoTextDocumentService implements TextDocumentService {
         }
     }
 
+    @Override
     public CompletableFuture<List<ColorPresentation>> colorPresentation(final ColorPresentationParams params) {
         return CompletableFuture.completedFuture(List.of());
     }
