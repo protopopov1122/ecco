@@ -4,8 +4,13 @@ import at.jku.isse.ecco.EccoException;
 import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.core.Association;
 import at.jku.isse.ecco.feature.FeatureRevision;
+import at.jku.isse.ecco.lsp.domain.Document;
+import at.jku.isse.ecco.lsp.domain.DocumentFeature;
+import at.jku.isse.ecco.lsp.domain.EccoDocument;
+import at.jku.isse.ecco.lsp.domain.EccoDocumentFeature;
 import at.jku.isse.ecco.lsp.server.EccoLspServer;
 import at.jku.isse.ecco.lsp.util.Pair;
+import at.jku.isse.ecco.lsp.util.Positions;
 import at.jku.isse.ecco.module.Condition;
 import at.jku.isse.ecco.module.Module;
 import at.jku.isse.ecco.module.ModuleRevision;
@@ -59,177 +64,76 @@ public class EccoTextDocumentService implements TextDocumentService {
 
     @Override
     public CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbol(DocumentSymbolParams params) {
-        logger.fine("Requested document symbols of " + params.getTextDocument().getUri());
-
-        final URI documentUri = URI.create(params.getTextDocument().getUri());
-        final Path documentPath = Path.of(documentUri.getPath());
-
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
-        final Path repoBasePath = eccoService.getBaseDir();
-        final Path documentInRepoPath = repoBasePath.relativize(documentPath);
-        logger.finer("Document path in repo " + documentInRepoPath.toString());
-
-        List<Either<SymbolInformation, DocumentSymbol>> symbols = null;
         try {
-            final RootNode documentRootNode = eccoService.map(List.of(documentInRepoPath));
-            final Map<FeatureRevision, Set<Node>> featureRevisionSetMap = this.extractFeatureRevisions(documentRootNode);
-            logger.finer("Identified feature revisions in document " + params.getTextDocument().getUri() + ": " + featureRevisionSetMap.keySet());
+            logger.fine("Requested document symbols of " + params.getTextDocument().getUri());
 
-            final Map<FeatureRevision, Range> featureRevisionRangeMap = featureRevisionSetMap.entrySet()
-                    .stream()
-                    .map(featureRevisionSetEntry ->
-                            new Pair<FeatureRevision, Optional<Range>>(
-                                    featureRevisionSetEntry.getKey(),
-                                    this.extractRangeFromNodes(featureRevisionSetEntry.getValue())
-                            )
-                    )
-                    .filter(featureRevisionOptionalPair -> !featureRevisionOptionalPair.getSecond().isEmpty())
-                    .collect(Collectors.toMap(
-                            Pair::getFirst,
-                            featureRevisionOptionalPair -> featureRevisionOptionalPair.getSecond().get()));
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            logger.finer("Document path in repo " + documentInRepoPath);
 
-            logger.finest("Identified feature revision source ranges in document " + params.getTextDocument().getUri() + ": " + featureRevisionRangeMap);
+            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+            final Map<FeatureRevision, DocumentFeature> documentFeatureMap = EccoDocumentFeature.from(document);
 
-            symbols = featureRevisionRangeMap.entrySet()
+            logger.finest("Identified document features in " + params.getTextDocument().getUri() + ": " + documentFeatureMap);
+
+            final List<Either<SymbolInformation, DocumentSymbol>> symbols = documentFeatureMap.values()
                         .stream()
-                        .map(featureRevisionRangeEntry -> {
+                        .map(documentFeature -> {
+                            final Range totalRange = documentFeature.getTotalRange().orElse(new Range());
                             final DocumentSymbol documentSymbol = new DocumentSymbol(
-                                    featureRevisionRangeEntry.getKey().getFeatureRevisionString(),
+                                    documentFeature.getFeatureRevision().getFeatureRevisionString(),
                                     SymbolKind.Object,
-                                    featureRevisionRangeEntry.getValue(),
-                                    featureRevisionRangeEntry.getValue());
+                                    totalRange,
+                                    totalRange);
                             return Either.<SymbolInformation, DocumentSymbol>forRight(documentSymbol);
                         })
                         .collect(Collectors.toList());
+
+            return CompletableFuture.completedFuture(symbols);
         }  catch (Throwable ex) {
             logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
             ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
             return CompletableFuture.failedFuture(new ResponseErrorException(error));
         }
-
-        return CompletableFuture.completedFuture(symbols);
     }
 
-    private Map<FeatureRevision, Set<Node>> extractFeatureRevisions(Node root) {
-        final Map<FeatureRevision, Set<Node>> featureRevisionSetMap = new HashMap<>();
+    public CompletableFuture<List<? extends DocumentHighlight>> documentHighlight(DocumentHighlightParams params) {
+        try {
+            logger.fine("Requested document highlights of " + params.getTextDocument().getUri());
 
-        root.traverse(node -> {
-            final Artifact<?> artifact = node.getArtifact();
-            if (artifact == null || !artifact.getProperties().containsKey("mapped")) {
-                return;
-            }
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            logger.finer("Document path in repo " + documentInRepoPath);
 
-            final Artifact<?> mappedArtifact = (Artifact<?>) artifact.getProperties().get("mapped");
-            if (mappedArtifact == null) {
-                return;
-            }
+            final Position highlightPosition = params.getPosition();
+            logger.finer("Highlight position is " + highlightPosition);
 
-            final Association association = mappedArtifact.getContainingNode().getContainingAssociation();
-            if (association == null) {
-                return;
-            }
-            if (!(association instanceof Association.Op)) {
-                throw new EccoException("Expected association " + association.getId() + " to be an instance of " + Association.Op.class);
-            }
+            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
 
-            final Association.Op associationOp = (Association.Op) association;
-            final Condition condition = associationOp.computeCondition();
-            final Map<Module, Collection<ModuleRevision>> conditionModules = condition.getModules();
+            final Set<Association> associations = document.getAssociationsAt(highlightPosition);
+            final Set<Node> nodes = document.getNodesFrom(associations);
+            final List<Range> nodeRanges = Positions.extractNodeRanges(nodes);
 
-            conditionModules.values()
-                    .stream()
-                    .flatMap(moduleRevisions -> moduleRevisions.stream())
-                    .flatMap(moduleRevision -> Arrays.stream(moduleRevision.getPos()))
-                    .forEach(featureRevision -> {
-                        Set<Node> nodes = null;
-                        if (featureRevisionSetMap.containsKey(featureRevision)) {
-                            nodes = featureRevisionSetMap.get(featureRevision);
-                        } else {
-                            nodes = new HashSet<>();
-                            featureRevisionSetMap.put(featureRevision, nodes);
-                        }
-
-                        nodes.add(node);
-                    });
-        });
-
-        return featureRevisionSetMap;
-    }
-
-    private Optional<Range> extractRangeFromNodes(Collection<? extends Node> nodes) {
-        final Comparator<Position> positionComparator = new Comparator<Position>() {
-            @Override
-            public int compare(Position p1, Position p2) {
-                if (p1.getLine() < p2.getLine() ||
-                        (p1.getLine() == p2.getLine() && p1.getCharacter() < p2.getCharacter())) {
-                    return -1;
-                } else if (p1.getLine() == p2.getLine() &&
-                    p1.getCharacter() == p2.getCharacter()) {
-                    return 0;
-                } else {
-                    return 1;
-                }
-            }
-        };
-
-        final BinaryOperator<Optional<Position>> startPositionCombinator = new BinaryOperator<Optional<Position>>() {
-            @Override
-            public Optional<Position> apply(Optional<Position> position1, Optional<Position> position2) {
-                if ((position1.isEmpty() && !position2.isEmpty()) ||
-                        (!position1.isEmpty() && !position2.isEmpty() &&
-                                positionComparator.compare(position1.get(), position2.get()) > 0)) {
-                    return position2;
-                } else {
-                    return position1;
-                }
-            }
-        };
-
-        final BinaryOperator<Optional<Position>> endPositionCombinator = new BinaryOperator<Optional<Position>>() {
-            @Override
-            public Optional<Position> apply(Optional<Position> position1, Optional<Position> position2) {
-                if ((position1.isEmpty() && !position2.isEmpty()) ||
-                        (!position1.isEmpty() && !position2.isEmpty() &&
-                                positionComparator.compare(position1.get(), position2.get()) < 0)) {
-                    return position2;
-                } else {
-                    return position1;
-                }
-            }
-        };
-
-        final String LINE_START = "LINE_START";
-        final String LINE_END = "LINE_END";
-        Pair<Optional<Position>, Optional<Position>> rangePositions = nodes.stream()
-                .filter(node -> node.getProperties().containsKey(LINE_START) || node.getProperties().containsKey(LINE_END))
-                .map(node -> {
-                    Optional<Position> lineStart = node
-                            .<Integer>getProperty("LINE_START")
-                            .map(line -> new Position(line - 1, 0));
-                    Optional<Position> lineEnd = node
-                            .<Integer>getProperty("LINE_END")
-                            .map(line -> new Position(line - 1, Integer.MAX_VALUE));
-                    return new Pair<>(lineStart, lineEnd);
-                })
-                .reduce(new Pair<Optional<Position>, Optional<Position>>(Optional.empty(), Optional.empty()), (result, element) -> {
-                    final Optional<Position> elementLineStart = element.getFirst();
-                    final Optional<Position> elementLineEnd = element.getSecond();
-
-                    final Optional<Position> resultLineStart = result.getFirst();
-                    final Optional<Position> resultLineEnd = result.getSecond();
-
-
-                    return new Pair<>(
-                            startPositionCombinator.apply(resultLineStart, elementLineStart),
-                            endPositionCombinator.apply(resultLineEnd, elementLineEnd));
-                });
-
-        if (rangePositions.getFirst().isEmpty()) {
-            return Optional.empty();
-        } else if (rangePositions.getSecond().isEmpty()) {
-            return Optional.of(new Range(rangePositions.getFirst().get(), rangePositions.getFirst().get()));
-        } else {
-            return Optional.of(new Range(rangePositions.getFirst().get(), rangePositions.getSecond().get()));
+            final List<? extends DocumentHighlight> highlights = nodeRanges.stream()
+                    .map(nodeRange -> {
+                        final DocumentHighlight documentHighlight = new DocumentHighlight(nodeRange, DocumentHighlightKind.Read);
+                        return documentHighlight;
+                    })
+                    .collect(Collectors.toList());
+            return CompletableFuture.completedFuture(highlights);
+        }  catch (Throwable ex) {
+            logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
+            ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
         }
+    }
+
+    private Path getDocumentPathInRepo(String uri) {
+        final EccoService eccoService = this.eccoLspServer.getEccoService();
+        final Path repoBasePath = eccoService.getBaseDir();
+        final URI documentUri = URI.create(uri);
+        final Path documentPath = Path.of(documentUri.getPath());
+        final Path documentInRepoPath = repoBasePath.relativize(documentPath);
+        return documentInRepoPath;
     }
 }

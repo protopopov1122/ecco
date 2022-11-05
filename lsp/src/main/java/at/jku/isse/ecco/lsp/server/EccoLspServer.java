@@ -88,6 +88,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
         InitializeResult result = new InitializeResult(new ServerCapabilities());
         result.getCapabilities().setTextDocumentSync(TextDocumentSyncKind.Full);
         result.getCapabilities().setDocumentSymbolProvider(new DocumentSymbolOptions());
+        result.getCapabilities().setDocumentHighlightProvider(new DocumentHighlightOptions());
         result.getCapabilities().setWorkspaceSymbolProvider(new WorkspaceSymbolOptions(true));
         return CompletableFuture.completedFuture(result);
     }
