@@ -4,10 +4,7 @@ import at.jku.isse.ecco.EccoException;
 import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.core.Association;
 import at.jku.isse.ecco.feature.FeatureRevision;
-import at.jku.isse.ecco.lsp.domain.Document;
-import at.jku.isse.ecco.lsp.domain.DocumentFeature;
-import at.jku.isse.ecco.lsp.domain.EccoDocument;
-import at.jku.isse.ecco.lsp.domain.EccoDocumentFeature;
+import at.jku.isse.ecco.lsp.domain.*;
 import at.jku.isse.ecco.lsp.server.EccoLspServer;
 import at.jku.isse.ecco.lsp.util.Pair;
 import at.jku.isse.ecco.lsp.util.Positions;
@@ -110,7 +107,8 @@ public class EccoTextDocumentService implements TextDocumentService {
 
             final Document document = EccoDocument.load(eccoService, documentInRepoPath);
 
-            final Set<Association> associations = document.getAssociationsAt(highlightPosition);
+            final Set<Node> nodesAtPosition = document.getNodesAt(highlightPosition);
+            final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
             final Set<Node> nodes = document.getNodesFrom(associations);
             final List<Range> nodeRanges = Positions.extractNodeRanges(nodes);
 
@@ -121,6 +119,48 @@ public class EccoTextDocumentService implements TextDocumentService {
                     })
                     .collect(Collectors.toList());
             return CompletableFuture.completedFuture(highlights);
+        }  catch (Throwable ex) {
+            logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
+            ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
+        }
+    }
+
+    public CompletableFuture<Hover> hover(HoverParams params) {
+
+        try {
+            logger.fine("Requested document hover of " + params.getTextDocument().getUri());
+
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            logger.finer("Document path in repo " + documentInRepoPath);
+
+            final Position hoverPosition = params.getPosition();
+            logger.finer("Hover position is " + hoverPosition);
+
+            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+
+            final Set<Node> nodesAtPosition = document.getNodesAt(hoverPosition);
+            final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
+            final String hoverText = associations.stream()
+                    .map(association -> association.computeCondition())
+                    .map(condition -> condition.toString())
+                    .collect(Collectors.joining("\n"));
+            final Comparator<Position> positionComparator = new PositionComparator();
+            final Range hoverRange = nodesAtPosition.stream()
+                    .map(node -> Positions.extractNodeRange(node))
+                    .reduce(new Range(hoverPosition, hoverPosition), (accumulator, range) -> {
+                        final Position resultStart = positionComparator.compare(accumulator.getStart(), range.getStart()) <= 0
+                                ? accumulator.getStart()
+                                : range.getStart();
+                        final Position resultEnd = positionComparator.compare(accumulator.getEnd(), range.getEnd()) >= 0
+                                ? accumulator.getEnd()
+                                : range.getEnd();
+                        return new Range(resultStart, resultEnd);
+                    });
+
+            final Hover hover = new Hover(List.of(Either.forLeft(hoverText)), hoverRange);
+            return CompletableFuture.completedFuture(hover);
         }  catch (Throwable ex) {
             logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
             ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);

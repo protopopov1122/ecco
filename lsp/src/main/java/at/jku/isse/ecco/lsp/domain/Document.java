@@ -19,8 +19,8 @@ public interface Document {
     Path getDocumentPath();
     RootNode getRootNode();
 
-    default Set<Association> getAssociationsAt(Position position) {
-        final Set<Association> associations = new HashSet<>();
+    default Set<Node> getNodesAt(Position position) {
+        final Set<Node> nodes = new HashSet<>();
         this.getRootNode().traverse(node -> {
             final Map<String, Object> nodeProperties = node.getProperties();
             if (!nodeProperties.containsKey(Positions.LINE_START) ||
@@ -29,7 +29,18 @@ public interface Document {
             }
 
             final Range nodeRange = Positions.extractNodeRange(node);
-            if (!Positions.rangeContains(nodeRange, position)) {
+            if (Positions.rangeContains(nodeRange, position)) {
+                nodes.add(node);
+            }
+        });
+
+        return nodes;
+    }
+
+    default Set<Association> getAssociationsOf(Collection<? extends Node> nodes) {
+        final Set<Association> associations = new HashSet<>();
+        this.getRootNode().traverse(node -> {
+            if (!nodes.contains(node)) {
                 return;
             }
 
