@@ -22,14 +22,12 @@ public interface Document {
     default Set<Node> getNodesAt(Position position) {
         final Set<Node> nodes = new HashSet<>();
         this.getRootNode().traverse(node -> {
-            final Map<String, Object> nodeProperties = node.getProperties();
-            if (!nodeProperties.containsKey(Positions.LINE_START) ||
-                    !nodeProperties.containsKey(Positions.LINE_END)) {
+            final Optional<Range> nodeRange = Positions.extractNodeRange(node);
+            if (nodeRange.isEmpty()) {
                 return;
             }
 
-            final Range nodeRange = Positions.extractNodeRange(node);
-            if (Positions.rangeContains(nodeRange, position)) {
+            if (Positions.rangeContains(nodeRange.get(), position)) {
                 nodes.add(node);
             }
         });

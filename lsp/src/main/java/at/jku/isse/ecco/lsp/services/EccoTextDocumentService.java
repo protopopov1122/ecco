@@ -6,6 +6,7 @@ import at.jku.isse.ecco.core.Association;
 import at.jku.isse.ecco.feature.FeatureRevision;
 import at.jku.isse.ecco.lsp.domain.*;
 import at.jku.isse.ecco.lsp.server.EccoLspServer;
+import at.jku.isse.ecco.lsp.util.Nodes;
 import at.jku.isse.ecco.lsp.util.Pair;
 import at.jku.isse.ecco.lsp.util.Positions;
 import at.jku.isse.ecco.module.Condition;
@@ -14,6 +15,7 @@ import at.jku.isse.ecco.module.ModuleRevision;
 import at.jku.isse.ecco.service.EccoService;
 import at.jku.isse.ecco.tree.Node;
 import at.jku.isse.ecco.tree.RootNode;
+import org.checkerframework.checker.nullness.Opt;
 import org.eclipse.lsp4j.*;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
@@ -148,7 +150,7 @@ public class EccoTextDocumentService implements TextDocumentService {
                     .collect(Collectors.joining("\n"));
             final Comparator<Position> positionComparator = new PositionComparator();
             final Range hoverRange = nodesAtPosition.stream()
-                    .map(node -> Positions.extractNodeRange(node))
+                    .map(node -> Positions.extractNodeRange(node).get())
                     .reduce(new Range(hoverPosition, hoverPosition), (accumulator, range) -> {
                         final Position resultStart = positionComparator.compare(accumulator.getStart(), range.getStart()) <= 0
                                 ? accumulator.getStart()
@@ -166,6 +168,56 @@ public class EccoTextDocumentService implements TextDocumentService {
             ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
             return CompletableFuture.failedFuture(new ResponseErrorException(error));
         }
+    }
+
+    public CompletableFuture<List<ColorInformation>> documentColor(DocumentColorParams params) {
+        try {
+            logger.fine("Requested document colors of " + params.getTextDocument().getUri());
+
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            logger.finer("Document path in repo " + documentInRepoPath);
+
+            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+
+            final List<ColorInformation> colorInformations = new ArrayList<>();
+            document.getRootNode().traverse(new Node.NodeVisitor() {
+                @Override
+                public void visit(Node node) {
+                    final Optional<Range> range = Positions.extractNodeStart(node)
+                            .map(startPosition -> new Range(
+                                    startPosition,
+                                    new Position(startPosition.getLine(), startPosition.getCharacter() + 1)));
+                    if (range.isEmpty()) {
+                        return;
+                    }
+
+                    final Optional<Association> association = Nodes.getMappedNodeAssociation(node);
+                    if (association.isEmpty()) {
+                        return;
+                    }
+
+                    final int associationHash = association.get().getAssociationString().hashCode();
+                    final Color associationColor = new Color(
+                            ((associationHash >> 8) & 0xff) / 255.0,
+                            ((associationHash >> 16) & 0xff) / 255.0,
+                            ((associationHash >> 24) & 0xff) / 255.0,
+                            1.0);
+
+                    colorInformations.add(new ColorInformation(range.get(), associationColor));
+                }
+            });
+
+            return CompletableFuture.completedFuture(colorInformations);
+        }  catch (Throwable ex) {
+            logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
+            final ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
+        }
+    }
+
+    public CompletableFuture<List<ColorPresentation>> colorPresentation(ColorPresentationParams params) {
+        return CompletableFuture.completedFuture(List.of());
     }
 
     private Path getDocumentPathInRepo(String uri) {

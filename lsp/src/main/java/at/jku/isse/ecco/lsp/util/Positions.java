@@ -4,26 +4,34 @@ import at.jku.isse.ecco.tree.Node;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class Positions {
     public static final String LINE_START = "LINE_START";
     public static final String LINE_END = "LINE_END";
 
-    public static Range extractNodeRange(final Node node) {
+    public static Optional<Position> extractNodeStart(final Node node) {
+        return node
+                .<Integer>getProperty(LINE_START)
+                .map(line -> new Position(line - 1, 0));
+    }
+
+    public static Optional<Range> extractNodeRange(final Node node) {
+        final Map<String, Object> properties = node.getProperties();
+        if (!properties.containsKey(LINE_START) || !properties.containsKey(LINE_END)) {
+            return Optional.empty();
+        }
+
         final Position lineStart = node
                 .<Integer>getProperty(LINE_START)
-                .map(line -> new Position(line, 0))
+                .map(line -> new Position(line - 1, 0))
                 .get();
         final Position lineEnd = node
                 .<Integer>getProperty(LINE_END)
-                .map(line -> new Position(line, Integer.MAX_VALUE))
+                .map(line -> new Position(line - 1, Integer.MAX_VALUE))
                 .get();
-        return new Range(lineStart, lineEnd);
+        return Optional.of(new Range(lineStart, lineEnd));
     }
 
     public static boolean rangeContains(final Range range, final Position position) {
@@ -44,8 +52,9 @@ public class Positions {
 
     public static List<Range> extractNodeRanges(Collection<? extends Node> nodes) {
         return nodes.stream()
-                .filter(node -> node.getProperties().containsKey(Positions.LINE_START) && node.getProperties().containsKey(Positions.LINE_END))
                 .map(Positions::extractNodeRange)
+                .filter(range -> range.isPresent())
+                .map(range -> range.get())
                 .collect(Collectors.toList());
     }
 }
