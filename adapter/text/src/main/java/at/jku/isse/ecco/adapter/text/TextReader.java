@@ -8,9 +8,7 @@ import at.jku.isse.ecco.service.listener.ReadListener;
 import at.jku.isse.ecco.tree.Node;
 import com.google.inject.Inject;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -77,6 +75,30 @@ public class TextReader implements ArtifactReader<Path, Set<Node.Op>> {
 				e.printStackTrace();
 			}
 
+		}
+		return nodes;
+	}
+
+	@Override
+	public Set<Node.Op> read(Path path, InputStream is) {
+		Set<Node.Op> nodes = new HashSet<>();
+		Artifact.Op<PluginArtifactData> pluginArtifact = this.entityFactory.createArtifact(new PluginArtifactData(this.getPluginId(), path));
+		Node.Op pluginNode = this.entityFactory.createOrderedNode(pluginArtifact);
+		nodes.add(pluginNode);
+
+		try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+			String line;
+			int i = 0;
+			while ((line = br.readLine()) != null) {
+				i++;
+				Artifact.Op<LineArtifactData> lineArtifact = this.entityFactory.createArtifact(new LineArtifactData(line));
+				Node.Op lineNode = this.entityFactory.createNode(lineArtifact);
+				lineNode.putProperty(PROPERTY_LINE_START, i);
+				lineNode.putProperty(PROPERTY_LINE_END, i);
+				pluginNode.addChild(lineNode);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 		return nodes;
 	}

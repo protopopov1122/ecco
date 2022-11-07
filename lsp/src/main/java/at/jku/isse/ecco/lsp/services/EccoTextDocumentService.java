@@ -16,55 +16,81 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.lsp4j.services.TextDocumentService;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class EccoTextDocumentService implements TextDocumentService {
     private final EccoLspServer eccoLspServer;
     private final Logger logger;
+    private final Map<String, String> unsavedDocumentContents;
 
     public EccoTextDocumentService(final EccoLspServer eccoLspServer) {
         this.eccoLspServer = eccoLspServer;
         this.logger = this.eccoLspServer.getLogger();
+        this.unsavedDocumentContents = new HashMap<>();
     }
 
     @Override
     public void didOpen(final DidOpenTextDocumentParams params) {
-        logger.finer("Opened document " + params.getTextDocument().getUri());
+        final String documentUri = params.getTextDocument().getUri();
+        logger.finer("Opened document " + documentUri);
+        this.unsavedDocumentContents.remove(documentUri);
     }
 
     @Override
     public void didChange(final DidChangeTextDocumentParams params) {
-        logger.finest("Changed document " + params.getTextDocument().getUri());
+        final String documentUri = params.getTextDocument().getUri();
+        logger.finest("Changed document " + documentUri);
+
+        final List<TextDocumentContentChangeEvent> contentChangeEvents = params.getContentChanges();
+        if (contentChangeEvents.size() != 1 || contentChangeEvents.get(0).getRange() != null) {
+            logger.severe("Unexpected content change event format: " + contentChangeEvents);
+            return;
+        }
+
+        this.unsavedDocumentContents.put(documentUri, contentChangeEvents.get(0).getText());
     }
 
     @Override
     public void didClose(final DidCloseTextDocumentParams params) {
-        logger.finer("Closed document " + params.getTextDocument().getUri());
+        final String documentUri = params.getTextDocument().getUri();
+        logger.finer("Closed document " + documentUri);
+        this.unsavedDocumentContents.remove(documentUri);
     }
 
     @Override
     public void didSave(final DidSaveTextDocumentParams params) {
-        logger.finer("Saved document " + params.getTextDocument().getUri());
+        final String documentUri = params.getTextDocument().getUri();
+        logger.finer("Saved document " + documentUri);
+        this.unsavedDocumentContents.remove(documentUri);
     }
 
     @Override
     public CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbol(final DocumentSymbolParams params) {
         try {
-            logger.fine("Requested document symbols of " + params.getTextDocument().getUri());
+            final String documentUri = params.getTextDocument().getUri();
+            logger.fine("Requested document symbols of " + documentUri);
 
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
+
             final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
             logger.finer("Document path in repo " + documentInRepoPath);
 
-            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+            final Document document = unsavedContent
+                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
+                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
+
             final Map<FeatureRevision, DocumentFeature> documentFeatureMap = EccoDocumentFeature.from(document);
 
-            logger.finest("Identified document features in " + params.getTextDocument().getUri() + ": " + documentFeatureMap);
+            logger.finest("Identified document features in " + documentUri + ": " + documentFeatureMap);
 
             final List<Either<SymbolInformation, DocumentSymbol>> symbols = documentFeatureMap.values()
                         .stream()
@@ -90,16 +116,20 @@ public class EccoTextDocumentService implements TextDocumentService {
     @Override
     public CompletableFuture<List<? extends DocumentHighlight>> documentHighlight(final DocumentHighlightParams params) {
         try {
-            logger.fine("Requested document highlights of " + params.getTextDocument().getUri());
+            final String documentUri = params.getTextDocument().getUri();
+            logger.fine("Requested document highlights of " + documentUri);
 
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
+
             final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
             logger.finer("Document path in repo " + documentInRepoPath);
 
             final Position highlightPosition = params.getPosition();
             logger.finer("Highlight position is " + highlightPosition);
 
-            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+            final Document document = unsavedContent
+                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
+                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
 
             final Set<Node> nodesAtPosition = document.getNodesAt(highlightPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
@@ -122,16 +152,20 @@ public class EccoTextDocumentService implements TextDocumentService {
     public CompletableFuture<Hover> hover(final HoverParams params) {
 
         try {
-            logger.fine("Requested document hover of " + params.getTextDocument().getUri());
+            final String documentUri = params.getTextDocument().getUri();
+            logger.fine("Requested document hover of " + documentUri);
 
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
+
             final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
             logger.finer("Document path in repo " + documentInRepoPath);
 
             final Position hoverPosition = params.getPosition();
             logger.finer("Hover position is " + hoverPosition);
 
-            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
+            final Document document = unsavedContent
+                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
+                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
 
             final Set<Node> nodesAtPosition = document.getNodesAt(hoverPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
@@ -164,14 +198,17 @@ public class EccoTextDocumentService implements TextDocumentService {
     @Override
     public CompletableFuture<List<ColorInformation>> documentColor(final DocumentColorParams params) {
         try {
-            logger.fine("Requested document colors of " + params.getTextDocument().getUri());
+            final String documentUri = params.getTextDocument().getUri();
+            logger.fine("Requested document colors of " + documentUri);
 
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
+
             final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
             logger.finer("Document path in repo " + documentInRepoPath);
 
-            final Document document = EccoDocument.load(eccoService, documentInRepoPath);
-
+            final Document document = unsavedContent
+                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
+                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
 
             final Map<Association, List<Range>> associationRanges = new HashMap<>();
             document.getRootNode().traverse(node -> {
@@ -233,5 +270,26 @@ public class EccoTextDocumentService implements TextDocumentService {
         final URI documentUri = URI.create(uri);
         final Path documentPath = Path.of(documentUri.getPath());
         return repoBasePath.relativize(documentPath);
+    }
+
+    private Optional<String> getUnsavedDocumentContent(final String uri) {
+        if (this.unsavedDocumentContents.containsKey(uri)) {
+            return Optional.of(this.unsavedDocumentContents.get(uri));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    private Function<String, Document> newUnsavedDocumentLoader(final Path documentInRepoPath) {
+        final EccoService eccoService = this.eccoLspServer.getEccoService();
+        return content -> {
+            final InputStream is = new ByteArrayInputStream(content.getBytes());
+            return EccoDocument.load(eccoService, documentInRepoPath, is);
+        };
+    }
+
+    private Supplier<Document> newDocumentLoader(final Path documentInRepoPath) {
+        final EccoService eccoService = this.eccoLspServer.getEccoService();
+        return () -> EccoDocument.load(eccoService, documentInRepoPath);
     }
 }

@@ -3,6 +3,7 @@ package at.jku.isse.ecco.lsp.domain;
 import at.jku.isse.ecco.service.EccoService;
 import at.jku.isse.ecco.tree.RootNode;
 
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -34,6 +35,11 @@ public class EccoDocument implements Document {
 
     public static EccoDocument load(final EccoService eccoService, final Path documentPath) {
         final RootNode documentRootNode = eccoService.map(List.of(documentPath));
+        return new EccoDocument(documentPath, documentRootNode);
+    }
+
+    public static EccoDocument load(final EccoService eccoService, final Path documentPath, InputStream content) {
+        final RootNode documentRootNode = eccoService.map(documentPath, content);
         return new EccoDocument(documentPath, documentRootNode);
     }
 }
