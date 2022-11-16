@@ -10,4 +10,7 @@ public interface EccoLspExtensions {
 
     @JsonRequest("checkout")
     CompletableFuture<CheckoutResponse> checkout(CheckoutRequest request);
+
+    @JsonRequest("commit")
+    CompletableFuture<CommitResponse> commit(CommitRequest request);
 }

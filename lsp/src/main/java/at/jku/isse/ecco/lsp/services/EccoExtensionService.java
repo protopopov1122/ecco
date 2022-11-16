@@ -1,8 +1,7 @@
 package at.jku.isse.ecco.lsp.services;
 
-import at.jku.isse.ecco.lsp.extensions.CheckoutRequest;
-import at.jku.isse.ecco.lsp.extensions.CheckoutResponse;
-import at.jku.isse.ecco.lsp.extensions.EccoLspExtensions;
+import at.jku.isse.ecco.core.Commit;
+import at.jku.isse.ecco.lsp.extensions.*;
 import at.jku.isse.ecco.lsp.server.EccoLspServer;
 import at.jku.isse.ecco.service.EccoService;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
@@ -30,6 +29,28 @@ public class EccoExtensionService implements EccoLspExtensions {
             final EccoService eccoService = this.eccoLspServer.getEccoService();
             eccoService.checkout(request.getConfiguration());
             return CompletableFuture.supplyAsync(CheckoutResponse::new);
+        } catch (Throwable ex) {
+            logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
+            final ResponseError error = new ResponseError(ResponseErrorCode.InvalidRequest, ex.getMessage(), null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
+        }
+    }
+
+    @Override
+    public CompletableFuture<CommitResponse> commit(final CommitRequest request) {
+        logger.fine("Requested ECCO commit: message=\"\"" + request.getMessage() + "\"; configuration=\"" + request.getConfiguration() + "\"");
+
+        try {
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            Commit commit = null;
+            if (request.getConfiguration().length() > 0) {
+                commit = eccoService.commit(request.getMessage(), request.getConfiguration());
+            } else {
+                commit = eccoService.commit(request.getMessage());
+            }
+
+            return CompletableFuture.completedFuture(new CommitResponse(
+                    commit.getId(), commit.getDate(), commit.getCommitMassage(), commit.getConfiguration().getConfigurationString()));
         } catch (Throwable ex) {
             logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
             final ResponseError error = new ResponseError(ResponseErrorCode.InvalidRequest, ex.getMessage(), null);
