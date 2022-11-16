@@ -6,6 +6,7 @@ import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.util.Ranges;
 
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -14,13 +15,6 @@ public class Positions {
 
     public static final int LINE_START_CHARACTER_NUM = 0;
     public static final int LINE_END_CHARACTER_NUM = Integer.MAX_VALUE;
-
-    public static Optional<Position> extractNodeStart(final Node node) {
-        return node
-                .<Integer>getProperty(Properties.LINE_START)
-                .map(line -> new Position(line, LINE_START_CHARACTER_NUM))
-                .map(Positions::mapPosition);
-    }
 
     public static Optional<Range> extractNodeRange(final Node node) {
         final Map<String, Object> properties = node.getProperties();
@@ -149,6 +143,21 @@ public class Positions {
                 .collect(Collectors.toList());
     }
 
+    public static Range collapseRange(final Range range) {
+        final Position rangeStart = range.getStart();
+
+        return new Range(
+                rangeStart,
+                new Position(rangeStart.getLine(), rangeStart.getCharacter() + 1)
+        );
+    }
+
+    public static Optional<Range> findShortestRangeContaining(final Stream<Range> rangeStream, final Position position) {
+        return rangeStream
+                .filter(range -> Positions.rangeContains(range, position))
+                .min(ShortestRangeComparator.Instance);
+    }
+
     public static class PositionComparator implements Comparator<Position> {
         @Override
         public int compare(final Position p1, final Position p2) {
@@ -163,5 +172,23 @@ public class Positions {
         }
 
         public static final Comparator<Position> Instance = new PositionComparator();
+    }
+
+    public static class ShortestRangeComparator implements Comparator<Range> {
+
+        @Override
+        public int compare(final Range r1, final Range r2) {
+            final int range1Length = r1.getEnd().getLine() - r1.getStart().getLine();
+            final int range2Length = r2.getEnd().getLine() - r2.getStart().getLine();
+            if (range1Length < range2Length) {
+                return -1;
+            } else if (range1Length == range2Length) {
+                return 0;
+            } else {
+                return 1;
+            }
+        }
+
+        public static final Comparator<Range> Instance = new ShortestRangeComparator();
     }
 }

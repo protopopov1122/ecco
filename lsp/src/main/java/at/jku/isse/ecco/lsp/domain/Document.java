@@ -47,18 +47,20 @@ public interface Document {
         return associations;
     }
 
-    default Set<Node> getNodesFrom(final Collection<? extends Association> associations) {
+    default  Map<Association, Set<Node>> getNodesFor(final Collection<? extends Association> associations) {
+        final Map<Association, Set<Node>> nodeMap = new HashMap<>();
         final Set<String> associationIds = associations.stream()
                 .map(Association::getId)
                 .collect(Collectors.toSet());
-        final Set<Node> nodes = new HashSet<>();
+
         this.getRootNode().traverse(node -> {
             final Optional<Association> association = Nodes.getMappedNodeAssociation(node);
             if (association.isPresent() && associationIds.contains(association.get().getId())) {
+                final Set<Node> nodes = nodeMap.computeIfAbsent(association.get(), assoc -> new HashSet<>());
                 nodes.add(node);
             }
         });
 
-        return nodes;
+        return nodeMap;
     }
 }

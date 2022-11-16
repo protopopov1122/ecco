@@ -5,6 +5,7 @@ import at.jku.isse.ecco.feature.FeatureRevision;
 import at.jku.isse.ecco.lsp.domain.*;
 import at.jku.isse.ecco.lsp.server.EccoLspServer;
 import at.jku.isse.ecco.lsp.util.Nodes;
+import at.jku.isse.ecco.lsp.util.Pair;
 import at.jku.isse.ecco.lsp.util.Positions;
 import at.jku.isse.ecco.module.Condition;
 import at.jku.isse.ecco.service.EccoService;
@@ -133,8 +134,28 @@ public class EccoTextDocumentService implements TextDocumentService {
 
             final Set<Node> nodesAtPosition = document.getNodesAt(highlightPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
-            final Set<Node> nodes = document.getNodesFrom(associations);
-            final List<Range> nodeRanges = Positions.rangesMerge(Positions.extractNodeRanges(nodes));
+            final Map<Association, Set<Node>> associationNodes = document.getNodesFor(associations);
+
+            final Comparator<Range> shortestRangeComparator = Positions.ShortestRangeComparator.Instance;
+            final List<Range> nodeRanges = associationNodes.values()
+                    .stream()
+                    .map(Positions::extractNodeRanges)
+                    .map(Positions::rangesMerge)
+                    .min((ranges1, ranges2) -> {
+
+                        Optional<Range> range1 = Positions.findShortestRangeContaining(ranges1.stream(), highlightPosition);
+                        Optional<Range> range2 = Positions.findShortestRangeContaining(ranges2.stream(), highlightPosition);
+
+                        if (range1.isEmpty()) {
+                            return 1;
+                        } else if (range2.isEmpty()) {
+                            return -1;
+                        } else {
+                            return shortestRangeComparator.compare(range1.get(), range2.get());
+                        }
+                    })
+                    .orElse(List.of());
+
             logger.finer("Highlight ranges " + nodeRanges);
 
             final List<? extends DocumentHighlight> highlights = nodeRanges.stream()
@@ -169,22 +190,40 @@ public class EccoTextDocumentService implements TextDocumentService {
 
             final Set<Node> nodesAtPosition = document.getNodesAt(hoverPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
-            final String hoverText = associations.stream()
+            final Map<Association, Set<Node>> associationNodes = document.getNodesFor(associations);
+
+
+            final Comparator<Range> shortestRangeComparator = Positions.ShortestRangeComparator.Instance;
+            final Optional<Pair<Association, Optional<Range>>> associationRange = associationNodes.entrySet()
+                    .stream()
+                    .map(entry -> new Pair<>(entry.getKey(), Positions.extractNodeRanges(entry.getValue())))
+                    .map(entry -> new Pair<>(entry.getFirst(), Positions.rangesMerge(entry.getSecond())))
+                    .map(entry -> new Pair<>(entry.getFirst(), Positions.findShortestRangeContaining(entry.getSecond().stream(), hoverPosition)))
+                    .min((entry1, entry2) -> {
+                        final Optional<Range> range1 = entry1.getSecond();
+                        final Optional<Range> range2 = entry2.getSecond();
+
+                        if (range1.isEmpty()) {
+                            return 1;
+                        } else if (range2.isEmpty()) {
+                            return -1;
+                        } else {
+                            return shortestRangeComparator.compare(range1.get(), range2.get());
+                        }
+                    });
+
+            final String hoverText = associationRange
+                    .map(Pair::getFirst)
                     .map(Association::computeCondition)
                     .map(Condition::toString)
-                    .collect(Collectors.joining("\n"));
-            final Comparator<Position> positionComparator = Positions.PositionComparator.Instance;
-            final Range hoverRange = nodesAtPosition.stream()
-                    .map(node -> Positions.extractNodeRange(node).get())
-                    .reduce(new Range(hoverPosition, hoverPosition), (accumulator, range) -> {
-                        final Position resultStart = positionComparator.compare(accumulator.getStart(), range.getStart()) <= 0
-                                ? accumulator.getStart()
-                                : range.getStart();
-                        final Position resultEnd = positionComparator.compare(accumulator.getEnd(), range.getEnd()) >= 0
-                                ? accumulator.getEnd()
-                                : range.getEnd();
-                        return new Range(resultStart, resultEnd);
-                    });
+                    .orElse("");
+            final Range hoverRange = associationRange
+                    .map(Pair::getSecond)
+                    .flatMap(Function.identity())
+                    .orElseGet(() -> new Range(
+                            new Position(hoverPosition.getLine(), Positions.LINE_START_CHARACTER_NUM),
+                            new Position(hoverPosition.getLine(), Positions.LINE_END_CHARACTER_NUM)
+                    ));
 
             final Hover hover = new Hover(List.of(Either.forLeft(hoverText)), hoverRange);
             return CompletableFuture.completedFuture(hover);
@@ -241,12 +280,10 @@ public class EccoTextDocumentService implements TextDocumentService {
                                 ((associationHash >> 24) & 0xff) / 255.0,
                                 1.0);
 
-                        return Positions.rangesMerge(associationListEntry.getValue()).stream()
+                        return  Positions.rangesMerge(associationListEntry.getValue())
+                                .stream()
                                 .flatMap(range -> Positions.rangeSplitLines(range).stream())
-                                .map(range -> new Range(
-                                        range.getStart(),
-                                        new Position(range.getStart().getLine(), range.getStart().getCharacter() + 1)
-                                ))
+                                .map(Positions::collapseRange)
                                 .map(range -> new ColorInformation(range, associationColor));
                     })
                     .collect(Collectors.toList());
