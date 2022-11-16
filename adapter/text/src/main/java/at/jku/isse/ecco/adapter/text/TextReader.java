@@ -60,17 +60,8 @@ public class TextReader implements ArtifactReader<Path, Set<Node.Op>> {
 			Node.Op pluginNode = this.entityFactory.createOrderedNode(pluginArtifact);
 			nodes.add(pluginNode);
 
-			try (BufferedReader br = new BufferedReader(new FileReader(resolvedPath.toFile()))) {
-				String line;
-				int i = 0;
-				while ((line = br.readLine()) != null) {
-					i++;
-					Artifact.Op<LineArtifactData> lineArtifact = this.entityFactory.createArtifact(new LineArtifactData(line));
-					Node.Op lineNode = this.entityFactory.createNode(lineArtifact);
-					lineNode.putProperty(PROPERTY_LINE_START, i);
-					lineNode.putProperty(PROPERTY_LINE_END, i);
-					pluginNode.addChild(lineNode);
-				}
+			try {
+				this.read(new FileReader(resolvedPath.toFile()), pluginNode);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -79,6 +70,7 @@ public class TextReader implements ArtifactReader<Path, Set<Node.Op>> {
 		return nodes;
 	}
 
+
 	@Override
 	public Set<Node.Op> read(Path path, InputStream is) {
 		Set<Node.Op> nodes = new HashSet<>();
@@ -86,7 +78,16 @@ public class TextReader implements ArtifactReader<Path, Set<Node.Op>> {
 		Node.Op pluginNode = this.entityFactory.createOrderedNode(pluginArtifact);
 		nodes.add(pluginNode);
 
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+		try {
+			this.read(new InputStreamReader(is), pluginNode);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return nodes;
+	}
+
+	private void read(Reader reader, Node.Op pluginNode) throws IOException {
+		try (BufferedReader br = new BufferedReader(reader)) {
 			String line;
 			int i = 0;
 			while ((line = br.readLine()) != null) {
@@ -97,10 +98,7 @@ public class TextReader implements ArtifactReader<Path, Set<Node.Op>> {
 				lineNode.putProperty(PROPERTY_LINE_END, i);
 				pluginNode.addChild(lineNode);
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
 		}
-		return nodes;
 	}
 
 
