@@ -18,6 +18,7 @@ include 'adapter-challenge'
 include 'adapter-cpp'
 include 'adapter-runtime'
 include 'adapter-java-proprietary'
+include 'adapter-xml-proprietary'
 
 //include 'preprocessor'
 
@@ -39,6 +40,7 @@ project(':adapter-challenge').projectDir = file('adapter/challenge')
 project(':adapter-cpp').projectDir = file('adapter/cpp')
 project(':adapter-runtime').projectDir = file('adapter/runtime')
 project(':adapter-java-proprietary').projectDir = file('adapter/java-proprietary')
+project(':adapter-xml-proprietary').projectDir = file('adapter/xml-proprietary')
 
 //project(':preprocessor').projectDir = file('preprocessor')
 
