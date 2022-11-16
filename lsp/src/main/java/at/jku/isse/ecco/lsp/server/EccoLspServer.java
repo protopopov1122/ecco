@@ -1,5 +1,8 @@
 package at.jku.isse.ecco.lsp.server;
 
+import at.jku.isse.ecco.lsp.extensions.CheckoutRequest;
+import at.jku.isse.ecco.lsp.extensions.EccoLspExtensions;
+import at.jku.isse.ecco.lsp.services.EccoExtensionService;
 import at.jku.isse.ecco.lsp.services.EccoTextDocumentService;
 import at.jku.isse.ecco.lsp.services.EccoWorkspaceService;
 import at.jku.isse.ecco.service.EccoService;
@@ -7,6 +10,8 @@ import org.eclipse.lsp4j.*;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
+import org.eclipse.lsp4j.jsonrpc.services.JsonDelegate;
+import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.eclipse.lsp4j.services.*;
 
 import java.net.URI;
@@ -20,6 +25,7 @@ import java.util.logging.Logger;
 public class EccoLspServer implements LanguageServer, LanguageClientAware {
     private final TextDocumentService textDocumentService;
     private final WorkspaceService workspaceService;
+    private final EccoLspExtensions eccoLspExtensions;
     private LanguageClient languageClient;
     private int exitCode;
     private EccoService eccoService;
@@ -34,6 +40,7 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
         logger.fine("Instantiating LSP services");
         this.textDocumentService = new EccoTextDocumentService(this);
         this.workspaceService = new EccoWorkspaceService(this);
+        this.eccoLspExtensions = new EccoExtensionService(this);
     }
 
     public EccoService getEccoService() {
@@ -117,5 +124,10 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
     @Override
     public WorkspaceService getWorkspaceService() {
         return this.workspaceService;
+    }
+
+    @JsonDelegate
+    public EccoLspExtensions getEccoLspExtensions() {
+        return this.eccoLspExtensions;
     }
 }
