@@ -8,8 +8,10 @@ import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class EccoExtensionService implements EccoLspExtensions {
 
@@ -38,19 +40,46 @@ public class EccoExtensionService implements EccoLspExtensions {
 
     @Override
     public CompletableFuture<CommitResponse> commit(final CommitRequest request) {
-        logger.fine("Requested ECCO commit: message=\"\"" + request.getMessage() + "\"; configuration=\"" + request.getConfiguration() + "\"");
+        final String configuration = request.getConfiguration();
+        final String message = request.getMessage();
+        logger.fine("Requested ECCO commit: message=\"\"" + message + "\"; configuration=\"" + configuration + "\"");
 
         try {
             final EccoService eccoService = this.eccoLspServer.getEccoService();
-            Commit commit = null;
-            if (request.getConfiguration().length() > 0) {
-                commit = eccoService.commit(request.getMessage(), request.getConfiguration());
-            } else {
-                commit = eccoService.commit(request.getMessage());
-            }
+            final Commit commit = configuration.length() > 0
+                    ? eccoService.commit(message, configuration)
+                    : eccoService.commit(message);
 
             return CompletableFuture.completedFuture(new CommitResponse(
                     commit.getId(), commit.getDate(), commit.getCommitMassage(), commit.getConfiguration().getConfigurationString()));
+        } catch (Throwable ex) {
+            logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
+            final ResponseError error = new ResponseError(ResponseErrorCode.InvalidRequest, ex.getMessage(), null);
+            return CompletableFuture.failedFuture(new ResponseErrorException(error));
+        }
+    }
+
+    @Override
+    public CompletableFuture<InfoResponse> info(InfoRequest request) {
+        logger.fine("Requested current ECCO repository configuration");
+        try {
+            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final String configuration = eccoService.getConfigStringFromFile(eccoService.getBaseDir());
+
+            final List<InfoResponse.CommitInfo> commits = eccoService.getCommits()
+                    .stream()
+                    .map(commit -> new InfoResponse.CommitInfo(
+                            commit.getId(), commit.getCommitMassage(), commit.getConfiguration().getConfigurationString(), commit.getDate()))
+                    .collect(Collectors.toList());
+
+            final List<InfoResponse.FeatureInfo> features = eccoService.getRepository().getFeatures()
+                    .stream()
+                    .map(feature -> new InfoResponse.FeatureInfo(
+                            feature.getId(), feature.getName(), feature.getDescription(),
+                            feature.getRevisions().stream().map(featureRevision -> featureRevision.getFeatureRevisionString()).collect(Collectors.toList())))
+                    .collect(Collectors.toList());
+
+            return CompletableFuture.completedFuture(new InfoResponse(eccoService.getBaseDir().toString(), configuration, commits, features));
         } catch (Throwable ex) {
             logger.severe(ex.getMessage() + "\t" + ex.getStackTrace());
             final ResponseError error = new ResponseError(ResponseErrorCode.InvalidRequest, ex.getMessage(), null);

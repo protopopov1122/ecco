@@ -13,4 +13,7 @@ public interface EccoLspExtensions {
 
     @JsonRequest("commit")
     CompletableFuture<CommitResponse> commit(CommitRequest request);
+
+    @JsonRequest("info")
+    CompletableFuture<InfoResponse> info(InfoRequest request);
 }
