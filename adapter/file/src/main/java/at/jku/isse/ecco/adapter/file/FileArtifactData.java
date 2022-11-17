@@ -32,6 +32,13 @@ public class FileArtifactData implements ArtifactData {
 		return complete.digest();
 	}
 
+	private static byte[] getSHADigest(byte[] data) throws IOException, NoSuchAlgorithmException {
+		MessageDigest complete = MessageDigest.getInstance("SHA1");
+		complete.update(data);
+
+		return complete.digest();
+	}
+
 //	private static final String HEXES = "0123456789ABCDEF";
 
 	private static String getHex(byte[] raw) {
@@ -82,6 +89,19 @@ public class FileArtifactData implements ArtifactData {
 			this.hexChecksum = null;
 		}
 		this.data = FileArtifactData.getData(resolvedPath);
+	}
+
+	public FileArtifactData(Path path, byte[] data) throws IOException {
+		this.path = path;
+		this.pathString = path.toString();
+		try {
+			this.checksum = FileArtifactData.getSHADigest(data);
+			this.hexChecksum = FileArtifactData.getHex(this.checksum);
+		} catch (NoSuchAlgorithmException e) {
+			this.checksum = null;
+			this.hexChecksum = null;
+		}
+		this.data = data;
 	}
 
 	public byte[] getChecksum() {
