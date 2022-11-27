@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.function.Function;
 
 public class Positions {
 
@@ -115,6 +116,65 @@ public class Positions {
                 }
             });
         return merged;
+    }
+
+    public interface ElementRangeMapper<T> {
+        T mapRange(T original, Range newRage);
+    };
+
+    public static <T> List<T> linearizeRanges(final Collection<? extends T> ranges, final Function<T, Range> rangeGet, final ElementRangeMapper<T> elementRangeMapper) {
+        List<T> linear = new ArrayList<>();
+
+        final Comparator<Position> positionComparator = PositionComparator.Instance;
+        final Comparator<Range> rangeComparator = ShortestRangeComparator.Instance;
+        ranges.stream()
+                .sorted((el1, el2) ->
+                        positionComparator.compare(rangeGet.apply(el1).getStart(), rangeGet.apply(el2).getStart()))
+                .forEach(element -> {
+                    if (linear.isEmpty()) {
+                        linear.add(element);
+                        return;
+                    }
+
+                    final T prevElement = linear.get(linear.size() - 1);
+                    final Range range = rangeGet.apply(element);
+                    final Range prevRange = rangeGet.apply(prevElement);
+
+                    final int startComparison = positionComparator.compare(prevRange.getStart(), range.getStart());
+                    if (startComparison < 0) {
+                        final int overlapComparison = positionComparator.compare(prevRange.getEnd(), range.getStart());
+                        if (overlapComparison > 0) {
+                            final int rangeLengthComparison = rangeComparator.compare(prevRange, range);
+                            if (rangeLengthComparison > 0) {
+                                linear.remove(linear.size() - 1);
+                                linear.add(elementRangeMapper.mapRange(prevElement,
+                                        new Range(prevRange.getStart(), range.getStart())));
+                                linear.add(element);
+                            } else {
+                                linear.add(elementRangeMapper.mapRange(element,
+                                        new Range(prevRange.getEnd(), range.getEnd())));
+                            }
+                        } else {
+                            linear.add(element);
+                        }
+                    } else if (startComparison == 0) {
+                        final int endComparison = positionComparator.compare(prevRange.getEnd(), range.getEnd());
+                        if (endComparison < 0) {
+                            linear.add(elementRangeMapper.mapRange(element,
+                                    new Range(prevRange.getEnd(), range.getEnd())));
+                        } else if (endComparison > 0) {
+                            linear.remove(linear.size() - 1);
+                            linear.add(element);
+                            linear.add(elementRangeMapper.mapRange(prevElement,
+                                    new Range(range.getEnd(), prevRange.getEnd())));
+                        }
+                    } else {
+                        throw new RuntimeException("Elements shall be sorted by range start");
+                    }
+                });
+
+        Logger.getGlobal().info(linear.toString());
+        return linear;
     }
 
     public static List<Range> extractNodeRanges(final Collection<? extends Node> nodes) {

@@ -16,4 +16,7 @@ public interface EccoLspExtensions {
 
     @JsonRequest("info")
     CompletableFuture<InfoResponse> info(InfoRequest request);
+
+    @JsonRequest("documentAssociations")
+    CompletableFuture<DocumentAssociationsResponse> documentAssociations(DocumentAssociationsRequest request);
 }

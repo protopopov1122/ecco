@@ -31,19 +31,19 @@ import java.util.stream.Collectors;
 public class EccoTextDocumentService implements TextDocumentService {
     private final EccoLspServer eccoLspServer;
     private final Logger logger;
-    private final Map<String, String> unsavedDocumentContents;
+    private final EccoServiceCommonState eccoServiceCommonState;
 
-    public EccoTextDocumentService(final EccoLspServer eccoLspServer) {
+    public EccoTextDocumentService(final EccoLspServer eccoLspServer, final EccoServiceCommonState eccoServiceCommonState) {
         this.eccoLspServer = eccoLspServer;
         this.logger = this.eccoLspServer.getLogger();
-        this.unsavedDocumentContents = new HashMap<>();
+        this.eccoServiceCommonState = eccoServiceCommonState;
     }
 
     @Override
     public void didOpen(final DidOpenTextDocumentParams params) {
         final String documentUri = params.getTextDocument().getUri();
         logger.finer("Opened document " + documentUri);
-        this.unsavedDocumentContents.remove(documentUri);
+        this.eccoServiceCommonState.removeUnsaved(documentUri);
     }
 
     @Override
@@ -57,21 +57,21 @@ public class EccoTextDocumentService implements TextDocumentService {
             return;
         }
 
-        this.unsavedDocumentContents.put(documentUri, contentChangeEvents.get(0).getText());
+        this.eccoServiceCommonState.updateUnsaved(documentUri, contentChangeEvents.get(0).getText());
     }
 
     @Override
     public void didClose(final DidCloseTextDocumentParams params) {
         final String documentUri = params.getTextDocument().getUri();
         logger.finer("Closed document " + documentUri);
-        this.unsavedDocumentContents.remove(documentUri);
+        this.eccoServiceCommonState.removeUnsaved(documentUri);
     }
 
     @Override
     public void didSave(final DidSaveTextDocumentParams params) {
         final String documentUri = params.getTextDocument().getUri();
         logger.finer("Saved document " + documentUri);
-        this.unsavedDocumentContents.remove(documentUri);
+        this.eccoServiceCommonState.removeUnsaved(documentUri);
     }
 
     @Override
@@ -80,14 +80,10 @@ public class EccoTextDocumentService implements TextDocumentService {
             final String documentUri = params.getTextDocument().getUri();
             logger.fine("Requested document symbols of " + documentUri);
 
-            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
-
-            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            final Path documentInRepoPath = this.eccoServiceCommonState.getDocumentPathInRepo(documentUri);
             logger.finer("Document path in repo " + documentInRepoPath);
 
-            final Document document = unsavedContent
-                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
-                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
+            final Document document = this.eccoServiceCommonState.documentLoader(documentUri).get();
 
             final Map<FeatureRevision, DocumentFeature> documentFeatureMap = EccoDocumentFeature.from(document);
 
@@ -120,17 +116,13 @@ public class EccoTextDocumentService implements TextDocumentService {
             final String documentUri = params.getTextDocument().getUri();
             logger.fine("Requested document highlights of " + documentUri);
 
-            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
-
-            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            final Path documentInRepoPath = this.eccoServiceCommonState.getDocumentPathInRepo(documentUri);
             logger.finer("Document path in repo " + documentInRepoPath);
 
             final Position highlightPosition = params.getPosition();
             logger.finer("Highlight position is " + highlightPosition);
 
-            final Document document = unsavedContent
-                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
-                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
+            final Document document = this.eccoServiceCommonState.documentLoader(documentUri).get();
 
             final Set<Node> nodesAtPosition = document.getNodesAt(highlightPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
@@ -176,17 +168,13 @@ public class EccoTextDocumentService implements TextDocumentService {
             final String documentUri = params.getTextDocument().getUri();
             logger.fine("Requested document hover of " + documentUri);
 
-            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
-
-            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            final Path documentInRepoPath = this.eccoServiceCommonState.getDocumentPathInRepo(documentUri);
             logger.finer("Document path in repo " + documentInRepoPath);
 
             final Position hoverPosition = params.getPosition();
             logger.finer("Hover position is " + hoverPosition);
 
-            final Document document = unsavedContent
-                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
-                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
+            final Document document = this.eccoServiceCommonState.documentLoader(documentUri).get();
 
             final Set<Node> nodesAtPosition = document.getNodesAt(hoverPosition);
             final Set<Association> associations = document.getAssociationsOf(nodesAtPosition);
@@ -240,14 +228,11 @@ public class EccoTextDocumentService implements TextDocumentService {
             final String documentUri = params.getTextDocument().getUri();
             logger.fine("Requested document colors of " + documentUri);
 
-            final Optional<String> unsavedContent = this.getUnsavedDocumentContent(documentUri);
 
-            final Path documentInRepoPath = this.getDocumentPathInRepo(params.getTextDocument().getUri());
+            final Path documentInRepoPath = this.eccoServiceCommonState.getDocumentPathInRepo(documentUri);
             logger.finer("Document path in repo " + documentInRepoPath);
 
-            final Document document = unsavedContent
-                    .map(this.newUnsavedDocumentLoader(documentInRepoPath))
-                    .orElseGet(this.newDocumentLoader(documentInRepoPath));
+            final Document document = this.eccoServiceCommonState.documentLoader(documentUri).get();
 
             final Map<Association, List<Range>> associationRanges = new HashMap<>();
             document.getRootNode().traverse(node -> {
@@ -271,20 +256,30 @@ public class EccoTextDocumentService implements TextDocumentService {
                 ranges.add(range.get());
             });
 
-            final List<ColorInformation> colorInformation = associationRanges.entrySet().stream()
-                    .flatMap(associationListEntry -> {
-                        final int associationHash = associationListEntry.getKey().getAssociationString().hashCode();
+            final List<Pair<Association, Range>> associationRangeList = associationRanges
+                    .entrySet().stream()
+                    .flatMap(associationListEntry ->
+                            Positions.rangesMerge(associationListEntry.getValue()).stream()
+                                    .map(range -> new Pair<>(associationListEntry.getKey(), range)))
+                    .toList();
+
+//            final List<Pair<Association, Range>> linearizedAssociationRanges = Positions.linearizeRanges(associationRangeList,
+//                    Pair::getSecond,
+//                    (pair, newRange) -> new Pair<>(pair.getFirst(), newRange));
+
+            final List<ColorInformation> colorInformation = associationRangeList.stream()
+                    .flatMap(pair -> Positions.rangeSplitLines(pair.getSecond()).stream()
+                            .map(range -> new Pair<>(pair.getFirst(), range)))
+                    .map(pair -> new Pair<>(pair.getFirst(), Positions.collapseRange(pair.getSecond())))
+                    .map(associationRangePair -> {
+                        final int associationHash = associationRangePair.getFirst().getAssociationString().hashCode();
                         final Color associationColor = new Color(
                                 ((associationHash >> 8) & 0xff) / 255.0,
                                 ((associationHash >> 16) & 0xff) / 255.0,
                                 ((associationHash >> 24) & 0xff) / 255.0,
                                 1.0);
 
-                        return  Positions.rangesMerge(associationListEntry.getValue())
-                                .stream()
-                                .flatMap(range -> Positions.rangeSplitLines(range).stream())
-                                .map(Positions::collapseRange)
-                                .map(range -> new ColorInformation(range, associationColor));
+                        return new ColorInformation(associationRangePair.getSecond(), associationColor);
                     })
                     .collect(Collectors.toList());
 
@@ -299,34 +294,5 @@ public class EccoTextDocumentService implements TextDocumentService {
     @Override
     public CompletableFuture<List<ColorPresentation>> colorPresentation(final ColorPresentationParams params) {
         return CompletableFuture.completedFuture(List.of());
-    }
-
-    private Path getDocumentPathInRepo(final String uri) {
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
-        final Path repoBasePath = eccoService.getBaseDir();
-        final URI documentUri = URI.create(uri);
-        final Path documentPath = Path.of(documentUri.getPath());
-        return repoBasePath.relativize(documentPath);
-    }
-
-    private Optional<String> getUnsavedDocumentContent(final String uri) {
-        if (this.unsavedDocumentContents.containsKey(uri)) {
-            return Optional.of(this.unsavedDocumentContents.get(uri));
-        } else {
-            return Optional.empty();
-        }
-    }
-
-    private Function<String, Document> newUnsavedDocumentLoader(final Path documentInRepoPath) {
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
-        return content -> {
-            final InputStream is = new ByteArrayInputStream(content.getBytes());
-            return EccoDocument.load(eccoService, documentInRepoPath, is);
-        };
-    }
-
-    private Supplier<Document> newDocumentLoader(final Path documentInRepoPath) {
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
-        return () -> EccoDocument.load(eccoService, documentInRepoPath);
     }
 }

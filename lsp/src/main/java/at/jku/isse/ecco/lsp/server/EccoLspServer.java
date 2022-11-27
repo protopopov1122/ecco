@@ -3,6 +3,7 @@ package at.jku.isse.ecco.lsp.server;
 import at.jku.isse.ecco.lsp.extensions.CheckoutRequest;
 import at.jku.isse.ecco.lsp.extensions.EccoLspExtensions;
 import at.jku.isse.ecco.lsp.services.EccoExtensionService;
+import at.jku.isse.ecco.lsp.services.EccoServiceCommonState;
 import at.jku.isse.ecco.lsp.services.EccoTextDocumentService;
 import at.jku.isse.ecco.lsp.services.EccoWorkspaceService;
 import at.jku.isse.ecco.service.EccoService;
@@ -38,9 +39,10 @@ public class EccoLspServer implements LanguageServer, LanguageClientAware {
         this.logger = logger;
 
         logger.fine("Instantiating LSP services");
-        this.textDocumentService = new EccoTextDocumentService(this);
+        final EccoServiceCommonState eccoServiceCommonState = new EccoServiceCommonState(this);
+        this.textDocumentService = new EccoTextDocumentService(this, eccoServiceCommonState);
         this.workspaceService = new EccoWorkspaceService(this);
-        this.eccoLspExtensions = new EccoExtensionService(this);
+        this.eccoLspExtensions = new EccoExtensionService(this, eccoServiceCommonState);
     }
 
     public EccoService getEccoService() {
