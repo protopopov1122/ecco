@@ -13,9 +13,8 @@ import at.jku.isse.ecco.service.listener.ReadListener;
 import at.jku.isse.ecco.tree.Node;
 import com.google.inject.Inject;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -117,6 +116,61 @@ public class LilypondReader implements ArtifactReader<Path, Set<Node.Op>> {
         parser.shutdown();
 
         return nodes;
+    }
+
+    @Override
+    public Set<Node.Op> read(final Path path, final InputStream inputStream) {
+        Set<Node.Op> nodes = new HashSet<>();
+
+        LilypondParser<ParceToken> parser = ParserFactory.getParser();
+        try {
+            if (parser == null) {
+                throw new IOException("no parser found");
+            }
+            parser.init();
+
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "could not initialize parser", e);
+            throw new RuntimeException("could not initialize parser", e);
+        }
+
+        try {
+            this.read(path, inputStream, parser, nodes);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        parser.shutdown();
+        return nodes;
+    }
+
+    private void read(final Path path, final InputStream inputStream, final LilypondParser<ParceToken> parser, final Set<Node.Op> nodes) throws IOException {
+        final byte[] content = inputStream.readAllBytes();
+
+        final TextPositionMap textPositionMap = new TextPositionMap();
+        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(content)))) {
+            textPositionMap.buildMap(bufferedReader);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        Artifact.Op<PluginArtifactData> pluginArtifact = this.entityFactory.createArtifact(new PluginArtifactData(this.getPluginId(), path));
+        Node.Op pluginNode = this.entityFactory.createOrderedNode(pluginArtifact);
+        nodes.add(pluginNode);
+
+        final Path tmpFilePath = Files.createTempFile("unsavedLilypondContent", "");
+        final File tmpFile = tmpFilePath.toFile();
+        try (OutputStream os = new FileOutputStream(tmpFile)) {
+            os.write(content);
+            LilypondNode<ParceToken> head = parser.parse(tmpFilePath, tokenMetric);
+            if (head == null) {
+                LOGGER.log(Level.SEVERE, "parser returned no node, file {0}", path);
+            } else {
+                head = LilyEccoTransformer.transform(head);
+                generateEccoTree(head, pluginNode, textPositionMap);
+            }
+        } finally {
+            tmpFile.delete();
+        }
     }
 
     public void generateEccoTree(LilypondNode<ParceToken> head, Node.Op node, final TextPositionMap textPositionMap) {
