@@ -24,19 +24,21 @@ public class Positions {
 
         final Position lineStart = node
                 .<Integer>getProperty(Properties.LINE_START)
-                .map(line -> new Position(line, LINE_START_CHARACTER_NUM))
+                .map(line -> new Position(line,
+                        (Integer) node.getProperties().getOrDefault(Properties.COLUMN_START, LINE_START_CHARACTER_NUM)))
                 .map(Positions::mapPosition)
                 .get();
         final Position lineEnd = node
                 .<Integer>getProperty(Properties.LINE_END)
-                .map(line -> new Position(line, LINE_END_CHARACTER_NUM))
+                .map(line -> new Position(line,
+                        (Integer) node.getProperties().getOrDefault(Properties.COLUMN_END, LINE_END_CHARACTER_NUM)))
                 .map(Positions::mapPosition)
                 .get();
         return Optional.of(new Range(lineStart, lineEnd));
     }
 
     private static Position mapPosition(final Position position) {
-        return new Position(position.getLine() - 1, position.getCharacter());
+        return new Position(position.getLine() - 1, position.getCharacter() - 1);
     }
 
     public static boolean rangeContains(final Range range, final Position position) {
