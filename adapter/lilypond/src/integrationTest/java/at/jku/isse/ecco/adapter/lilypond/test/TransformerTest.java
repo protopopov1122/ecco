@@ -6,6 +6,7 @@ import at.jku.isse.ecco.adapter.lilypond.LilypondNode;
 import at.jku.isse.ecco.adapter.lilypond.LilypondReader;
 import at.jku.isse.ecco.adapter.lilypond.LilypondStringWriter;
 import at.jku.isse.ecco.adapter.lilypond.parce.ParceToken;
+import at.jku.isse.ecco.adapter.lilypond.util.TextPositionMap;
 import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.dao.EntityFactory;
 import at.jku.isse.ecco.storage.mem.dao.MemEntityFactory;
@@ -326,7 +327,7 @@ public class TransformerTest {
         LilypondReader rd = new LilypondReader(ef);
         Artifact.Op<PluginArtifactData> pluginArtifact = ef.createArtifact(new PluginArtifactData(rd.getPluginId(), Path.of("")));
         Node.Op pluginNode = ef.createOrderedNode(pluginArtifact);
-        rd.generateEccoTree(h, pluginNode);
+        rd.generateEccoTree(h, pluginNode, new TextPositionMap());
 
         Set<Node> nodes = new HashSet<>();
         nodes.add(pluginNode);

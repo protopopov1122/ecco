@@ -18,6 +18,7 @@ dependencies {
 	runtimeOnly project(':ecco-adapter-file')
 	runtimeOnly project(':ecco-adapter-text')
 	runtimeOnly project(':ecco-adapter-image')
+	runtimeOnly project(':ecco-adapter-lilypond')
 //	runtimeOnly project(':ecco-adapter-java-proprietary')
 //	runtimeOnly project(':ecco-adapter-xml-proprietary')
 }

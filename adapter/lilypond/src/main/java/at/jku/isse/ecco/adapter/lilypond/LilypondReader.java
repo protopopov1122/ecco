@@ -5,6 +5,7 @@ import at.jku.isse.ecco.adapter.dispatch.PluginArtifactData;
 import at.jku.isse.ecco.adapter.lilypond.data.ContextArtifactDataFactory;
 import at.jku.isse.ecco.adapter.lilypond.data.TokenArtifactDataFactory;
 import at.jku.isse.ecco.adapter.lilypond.parce.ParceToken;
+import at.jku.isse.ecco.adapter.lilypond.util.TextPositionMap;
 import at.jku.isse.ecco.artifact.Artifact;
 import at.jku.isse.ecco.artifact.ArtifactData;
 import at.jku.isse.ecco.dao.EntityFactory;
@@ -12,6 +13,8 @@ import at.jku.isse.ecco.service.listener.ReadListener;
 import at.jku.isse.ecco.tree.Node;
 import com.google.inject.Inject;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -90,6 +93,12 @@ public class LilypondReader implements ArtifactReader<Path, Set<Node.Op>> {
 
         for (Path path : input) {
             Path resolvedPath = base.resolve(path);
+            final TextPositionMap textPositionMap = new TextPositionMap();
+            try (BufferedReader bufferedReader = new BufferedReader(new FileReader(resolvedPath.toFile()))) {
+                textPositionMap.buildMap(bufferedReader);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
             Artifact.Op<PluginArtifactData> pluginArtifact = this.entityFactory.createArtifact(new PluginArtifactData(this.getPluginId(), path));
             Node.Op pluginNode = this.entityFactory.createOrderedNode(pluginArtifact);
             nodes.add(pluginNode);
@@ -99,7 +108,7 @@ public class LilypondReader implements ArtifactReader<Path, Set<Node.Op>> {
                 LOGGER.log(Level.SEVERE, "parser returned no node, file {0}", resolvedPath);
             } else {
                 head = LilyEccoTransformer.transform(head);
-                generateEccoTree(head, pluginNode);
+                generateEccoTree(head, pluginNode, textPositionMap);
             }
 
             listeners.forEach(l -> l.fileReadEvent(resolvedPath, this));
@@ -110,7 +119,7 @@ public class LilypondReader implements ArtifactReader<Path, Set<Node.Op>> {
         return nodes;
     }
 
-    public void generateEccoTree(LilypondNode<ParceToken> head, Node.Op node) {
+    public void generateEccoTree(LilypondNode<ParceToken> head, Node.Op node, final TextPositionMap textPositionMap) {
         Artifact.Op<ArtifactData> a;
         Node.Op nop;
 
@@ -129,6 +138,23 @@ public class LilypondReader implements ArtifactReader<Path, Set<Node.Op>> {
             } else {
                 nop = this.entityFactory.createNode(a);
                 node.addChild(nop);
+            }
+            if (n.getData() != null) {
+                final int position = n.getData().getPos();
+                nop.putProperty("SOURCE_POSITION", Integer.toString(position));
+
+                final Optional<TextPositionMap.TextPosition> textPosition = textPositionMap.get(position);
+                if (textPosition.isPresent()) {
+                    nop.putProperty("LINE_START", textPosition.get().getLine());
+                    nop.putProperty("COLUMN_START", textPosition.get().getColumn());
+                }
+
+                final int endPosition = n.getData().getPos() + n.getData().getText().length();
+                final Optional<TextPositionMap.TextPosition> endTextPosition = textPositionMap.get(endPosition);
+                if (endTextPosition.isPresent()) {
+                    nop.putProperty("LINE_END", endTextPosition.get().getLine());
+                    nop.putProperty("COLUMN_END", endTextPosition.get().getColumn());
+                }
             }
             cntNodes++;
 
