@@ -28,7 +28,7 @@ dependencies {
 //	runtimeOnly project(':ecco-adapter-java-proprietary')
 //	runtimeOnly project(':ecco-adapter-xml-proprietary')
 //	runtimeOnly project(':ecco-adapter-java')
-//	runtimeOnly project(':ecco-adapter-lilypond')
+	runtimeOnly project(':ecco-adapter-lilypond')
 
 
 //	testRuntimeOnly project(':ecco-adapter-java-proprietary')
