@@ -16,6 +16,7 @@ import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
+import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -165,5 +166,23 @@ public class EccoExtensionService implements EccoLspExtensions {
             final ResponseError error = new ResponseError(ResponseErrorCode.InternalError, ex.getMessage(), null);
             return CompletableFuture.failedFuture(new ResponseErrorException(error));
         }
+    }
+
+    @Override
+    public CompletableFuture<SettingsState> getSettings(SettingsRequest request) {
+        logger.fine("Requested server settings");
+        return CompletableFuture.completedFuture(new SettingsState(
+                this.eccoServiceCommonState.getSettings().getIgnoreColumnsForColoring()));
+    }
+
+    @Override
+    public CompletableFuture<SettingsState> updateSettings(SettingsState request) {
+        final Settings settings = this.eccoServiceCommonState.getSettings();
+        settings.setIgnoreColumnsForColoring(request.getIgnoreColumnsForColoring());
+
+        logger.fine("Requested server setting update: " + settings.toString());
+
+        return CompletableFuture.completedFuture(new SettingsState(
+                settings.getIgnoreColumnsForColoring()));
     }
 }

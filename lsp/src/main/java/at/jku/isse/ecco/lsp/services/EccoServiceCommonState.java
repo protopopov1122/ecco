@@ -18,10 +18,16 @@ import java.util.function.Supplier;
 public class EccoServiceCommonState {
     private final EccoLspServer eccoLspServer;
     private final Map<String, String> unsavedDocumentContents;
+    private final Settings settings;
 
     public EccoServiceCommonState(final EccoLspServer eccoLspServer) {
         this.eccoLspServer = eccoLspServer;
         this.unsavedDocumentContents = new HashMap<>();
+        this.settings = new Settings();
+    }
+
+    public Settings getSettings() {
+        return this.settings;
     }
 
     public void removeUnsaved(final String uri) {

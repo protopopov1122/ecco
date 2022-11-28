@@ -214,6 +214,16 @@ public class Positions {
         );
     }
 
+    public static Range ignoreRangeColumns(final Range range) {
+        final Position rangeStart = range.getStart();
+        final Position rangeEnd = range.getEnd();
+
+        return new Range(
+                new Position(rangeStart.getLine(), 0),
+                new Position(rangeEnd.getLine(), 0)
+        );
+    }
+
     public static Optional<Range> findShortestRangeContaining(final Stream<Range> rangeStream, final Position position) {
         return rangeStream
                 .filter(range -> Positions.rangeContains(range, position))

@@ -236,7 +236,15 @@ public class EccoTextDocumentService implements TextDocumentService {
 
             final Map<Association, List<Range>> associationRanges = new HashMap<>();
             document.getRootNode().traverse(node -> {
-                final Optional<Range> range = Positions.extractNodeRange(node);
+                final Optional<Range> range = Positions
+                        .extractNodeRange(node)
+                        .map(r -> {
+                            if (this.eccoServiceCommonState.getSettings().getIgnoreColumnsForColoring()) {
+                                return Positions.ignoreRangeColumns(r);
+                            } else {
+                                return r;
+                            }
+                        });
                 if (range.isEmpty()) {
                     return;
                 }
