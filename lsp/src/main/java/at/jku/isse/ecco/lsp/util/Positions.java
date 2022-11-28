@@ -3,7 +3,6 @@ package at.jku.isse.ecco.lsp.util;
 import at.jku.isse.ecco.tree.Node;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
-import org.eclipse.lsp4j.util.Ranges;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -14,7 +13,7 @@ import java.util.function.Function;
 
 public class Positions {
 
-    public static final int LINE_START_CHARACTER_NUM = 0;
+    public static final int LINE_START_CHARACTER_NUM = 1;
     public static final int LINE_END_CHARACTER_NUM = Integer.MAX_VALUE;
 
     public static Optional<Range> extractNodeRange(final Node node) {
