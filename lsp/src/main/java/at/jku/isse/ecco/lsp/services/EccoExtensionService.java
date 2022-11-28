@@ -153,6 +153,7 @@ public class EccoExtensionService implements EccoLspExtensions {
                             .map(range -> new Pair<>(pair.getFirst(),range)))
                     .map(associationRangePair ->
                             new DocumentAssociationsResponse.FragmentAssociation(associationRangePair.getSecond(),
+                                    associationRangePair.getFirst().getAssociationString(),
                                     associationRangePair.getFirst().computeCondition().toString()))
                     .toList();
 

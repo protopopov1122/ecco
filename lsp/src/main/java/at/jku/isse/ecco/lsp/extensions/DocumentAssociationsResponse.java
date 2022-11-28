@@ -14,10 +14,12 @@ public class DocumentAssociationsResponse {
     public static class FragmentAssociation {
         private final Range range;
         private final String association;
+        private final String associationCondition;
 
-        public FragmentAssociation(final Range range, final String association) {
+        public FragmentAssociation(final Range range, final String association, final String associationCondition) {
             this.range = range;
             this.association = association;
+            this.associationCondition = associationCondition;
         }
     }
 
