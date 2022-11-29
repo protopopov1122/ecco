@@ -13,7 +13,7 @@ import java.util.function.Function;
 
 public class Positions {
 
-    public static final int LINE_START_CHARACTER_NUM = 1;
+    public static final int LINE_START_CHARACTER_NUM = 0;
     public static final int LINE_END_CHARACTER_NUM = Integer.MAX_VALUE;
 
     public static Optional<Range> extractNodeRange(final Node node) {
@@ -25,7 +25,7 @@ public class Positions {
         final Position lineStart = node
                 .<Integer>getProperty(Properties.LINE_START)
                 .map(line -> new Position(line,
-                        (Integer) node.getProperties().getOrDefault(Properties.COLUMN_START, LINE_START_CHARACTER_NUM)))
+                        (Integer) node.getProperties().getOrDefault(Properties.COLUMN_START, LINE_START_CHARACTER_NUM + 1)))
                 .map(Positions::mapPosition)
                 .get();
         final Position lineEnd = node
