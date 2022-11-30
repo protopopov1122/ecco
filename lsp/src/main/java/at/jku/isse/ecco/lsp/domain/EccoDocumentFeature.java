@@ -12,21 +12,22 @@ import at.jku.isse.ecco.tree.Node;
 import org.eclipse.lsp4j.Range;
 
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class EccoDocumentFeature implements DocumentFeature {
 
     private final Document document;
     private final FeatureRevision featureRevision;
-    private final Set<Node> nodes;
-    private List<Range> ranges;
+    private final List<Node> nodes;
+    private final List<Range> ranges;
 
     public EccoDocumentFeature(final Document document, final FeatureRevision featureRevision, final Collection<? extends Node> nodes) {
         this.document = document;
         this.featureRevision = featureRevision;
-        this.nodes = Set.copyOf(nodes);
+        this.nodes = new ArrayList<>(nodes);
 
-        this.extractNodeRanges();
+        this.ranges = Positions.extractNodeRanges(nodes);
     }
 
     @Override
@@ -50,12 +51,8 @@ public class EccoDocumentFeature implements DocumentFeature {
                 this.getFeatureRevision().getFeatureRevisionString();
     }
 
-    private void extractNodeRanges() {
-        this.ranges = Positions.extractNodeRanges(this.nodes);
-    }
-
     public static Map<FeatureRevision, DocumentFeature> from(final Document document) {
-        final Map<FeatureRevision, Set<Node>> featureRevisionSetMap = new HashMap<>();
+        final Map<FeatureRevision, List<Node>> featureRevisionSetMap = new HashMap<>();
 
         document.getRootNode().traverse(node -> {
             final Optional<Association> associationOptional = Nodes.getMappedNodeAssociation(node);
@@ -78,21 +75,15 @@ public class EccoDocumentFeature implements DocumentFeature {
                     .flatMap(Collection<ModuleRevision>::stream)
                     .flatMap(moduleRevision -> Arrays.stream(moduleRevision.getPos()))
                     .forEach(featureRevision -> {
-                        Set<Node> nodes;
-                        if (featureRevisionSetMap.containsKey(featureRevision)) {
-                            nodes = featureRevisionSetMap.get(featureRevision);
-                        } else {
-                            nodes = new HashSet<>();
-                            featureRevisionSetMap.put(featureRevision, nodes);
-                        }
-
+                        final List<Node> nodes = featureRevisionSetMap.computeIfAbsent(featureRevision, rev -> new ArrayList<>());
                         nodes.add(node);
                     });
         });
 
         return featureRevisionSetMap.entrySet().stream()
-                .map(featureRevisionSetEntry -> new EccoDocumentFeature(document, featureRevisionSetEntry.getKey(), featureRevisionSetEntry.getValue()))
-                .collect(Collectors.toMap(EccoDocumentFeature::getFeatureRevision, eccoDocumentFeature -> eccoDocumentFeature));
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> new EccoDocumentFeature(document, entry.getKey(), entry.getValue())));
     }
 
 }

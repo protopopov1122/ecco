@@ -179,12 +179,15 @@ public class Positions {
     public static List<Range> extractNodeRanges(final Collection<? extends Node> nodes) {
         return nodes.stream()
                 .map(Positions::extractNodeRange)
-                .filter(Optional<Range>::isPresent)
-                .map(Optional<Range>::get)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .collect(Collectors.toList());
     }
 
     public static List<Range> rangeSplitLines(final Range range) {
+        if (range.getStart().getLine() == range.getEnd().getLine()) {
+            return List.of(range);
+        }
         return IntStream.range(range.getStart().getLine(), range.getEnd().getLine() + 1)
                 .mapToObj(line -> {
                     if (line == range.getStart().getLine()) {
@@ -235,7 +238,7 @@ public class Positions {
             if (p1.getLine() < p2.getLine() ||
                     (p1.getLine() == p2.getLine() && p1.getCharacter() < p2.getCharacter())) {
                 return -1;
-            } else if (p1.equals(p2)) {
+            } else if (p1.getLine() == p2.getLine() && p1.getCharacter() == p2.getCharacter()) {
                 return 0;
             } else {
                 return 1;
