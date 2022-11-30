@@ -30,7 +30,9 @@ import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
@@ -53,7 +55,9 @@ public class EccoExtensionService implements EccoLspExtensions {
         logger.fine("Requested ECCO configuration checkout: " + request.getConfiguration());
 
         try {
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final URI workspaceUri = URI.create(request.getWorkspaceUri());
+            final Path workspacePath = Paths.get(workspaceUri);
+            final EccoService eccoService = this.eccoLspServer.getEccoServiceFor(workspacePath);
             eccoService.checkout(request.getConfiguration());
             return CompletableFuture.supplyAsync(CheckoutResponse::new);
         } catch (Throwable ex) {
@@ -70,7 +74,10 @@ public class EccoExtensionService implements EccoLspExtensions {
         logger.fine("Requested ECCO commit: message=\"\"" + message + "\"; configuration=\"" + configuration + "\"");
 
         try {
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final URI workspaceUri = URI.create(request.getWorkspaceUri());
+            final Path workspacePath = Paths.get(workspaceUri);
+
+            final EccoService eccoService = this.eccoLspServer.getEccoServiceFor(workspacePath);
             final Commit commit = configuration.length() > 0
                     ? eccoService.commit(message, configuration)
                     : eccoService.commit(message);
@@ -88,7 +95,10 @@ public class EccoExtensionService implements EccoLspExtensions {
     public CompletableFuture<InfoResponse> info(final InfoRequest request) {
         logger.fine("Requested current ECCO repository configuration");
         try {
-            final EccoService eccoService = this.eccoLspServer.getEccoService();
+            final URI workspaceUri = URI.create(request.getWorkspaceUri());
+            final Path workspacePath = Paths.get(workspaceUri);
+
+            final EccoService eccoService = this.eccoLspServer.getEccoServiceFor(workspacePath);
             final String configuration = eccoService.getConfigStringFromFile(eccoService.getBaseDir());
 
             final List<InfoResponse.CommitInfo> commits = eccoService.getCommits()

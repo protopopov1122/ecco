@@ -5,6 +5,9 @@ import org.eclipse.lsp4j.*;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.services.WorkspaceService;
 
+import java.net.URI;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
@@ -27,16 +30,17 @@ public class EccoWorkspaceService implements WorkspaceService {
     }
 
     @Override
-    public CompletableFuture<Either<List<? extends SymbolInformation>, List<? extends WorkspaceSymbol>>> symbol(final WorkspaceSymbolParams params) {
-        logger.fine("Requested workspace symbols");
-
-        List<WorkspaceSymbol> symbols = List.of();
-        return  CompletableFuture.completedFuture(Either.forRight(symbols));
-    }
-
-    @Override
-    public CompletableFuture<WorkspaceSymbol> resolveWorkspaceSymbol(final WorkspaceSymbol workspaceSymbol) {
-        logger.fine("Resolve workspace symbol " + workspaceSymbol.toString());
-        return  CompletableFuture.completedFuture(workspaceSymbol);
+    public void didChangeWorkspaceFolders(DidChangeWorkspaceFoldersParams params) {
+        logger.info("Workspace folders changed: added=" + params.getEvent().getAdded() + ", removed=" + params.getEvent().getRemoved());
+        params.getEvent().getRemoved().forEach(workspaceFolder -> {
+            final URI uri = URI.create(workspaceFolder.getUri());
+            final Path path = Paths.get(uri);
+            this.eccoLspServer.removeEccoServiceFor(path);
+        });
+        params.getEvent().getAdded().forEach(workspaceFolder -> {
+            final URI uri = URI.create(workspaceFolder.getUri());
+            final Path path = Paths.get(uri);
+            this.eccoLspServer.addEccoServiceFor(path);
+        });
     }
 }

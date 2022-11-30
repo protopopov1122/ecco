@@ -47,16 +47,19 @@ public class EccoServiceCommonState {
     }
 
     public Path getDocumentPathInRepo(final String uri) {
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
-        final Path repoBasePath = eccoService.getBaseDir();
         final URI documentUri = URI.create(uri);
         final Path documentPath = Path.of(documentUri.getPath());
+        final EccoService eccoService = this.eccoLspServer.getEccoServiceFor(documentPath);
+        final Path repoBasePath = eccoService.getBaseDir();
         return repoBasePath.relativize(documentPath);
     }
 
     public Supplier<Document> documentLoader(final String uri) {
-        final Path documentInRepoPath = this.getDocumentPathInRepo(uri);
-        final EccoService eccoService = this.eccoLspServer.getEccoService();
+        final URI documentUri = URI.create(uri);
+        final Path documentPath = Path.of(documentUri.getPath());
+        final EccoService eccoService = this.eccoLspServer.getEccoServiceFor(documentPath);
+        final Path repoBasePath = eccoService.getBaseDir();
+        final Path documentInRepoPath = repoBasePath.relativize(documentPath);
         return this.getUnsaved(uri)
                 .map(content -> {
                     final Supplier<Document> documentSupplier = () -> {
