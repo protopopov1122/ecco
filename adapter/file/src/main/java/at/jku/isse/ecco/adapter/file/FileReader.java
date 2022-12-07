@@ -9,6 +9,7 @@ import at.jku.isse.ecco.tree.Node;
 import com.google.inject.Inject;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -65,6 +66,24 @@ public class FileReader implements ArtifactReader<Path, Set<Node.Op>> {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+		}
+		return nodes;
+	}
+
+	@Override
+	public Set<Node.Op> read(Path path, InputStream input) {
+		Set<Node.Op> nodes = new HashSet<>();
+		try {
+			Artifact.Op<PluginArtifactData> pluginArtifact = this.entityFactory.createArtifact(new PluginArtifactData(this.getPluginId(), path));
+			Node.Op pluginNode = this.entityFactory.createNode(pluginArtifact);
+			nodes.add(pluginNode);
+
+			byte[] data = input.readAllBytes();
+			FileArtifactData fileArtifactData = new FileArtifactData(path, data);
+			Node.Op fileNode = this.entityFactory.createNode(this.entityFactory.createArtifact(fileArtifactData));
+			pluginNode.addChild(fileNode);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 		return nodes;
 	}
