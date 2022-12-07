@@ -17,6 +17,7 @@ include 'adapter-challenge'
 //include 'adapter-java-8'
 include 'adapter-cpp'
 include 'adapter-runtime'
+include 'adapter-lilypond'
 
 //include 'preprocessor'
 
@@ -37,6 +38,7 @@ project(':adapter-challenge').projectDir = file('adapter/challenge')
 //project(':adapter-java').projectDir = file('adapter/java8')
 project(':adapter-cpp').projectDir = file('adapter/cpp')
 project(':adapter-runtime').projectDir = file('adapter/runtime')
+project(':adapter-lilypond').projectDir = file('adapter/lilypond')
 
 //project(':preprocessor').projectDir = file('preprocessor')
 
