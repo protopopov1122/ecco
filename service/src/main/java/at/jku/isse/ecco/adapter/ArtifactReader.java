@@ -2,6 +2,7 @@ package at.jku.isse.ecco.adapter;
 
 import at.jku.isse.ecco.service.listener.ReadListener;
 
+import java.io.InputStream;
 import java.util.Map;
 
 /**
@@ -26,5 +27,9 @@ public interface ArtifactReader<I, O> {
 	public void addListener(ReadListener listener);
 
 	public void removeListener(ReadListener listener);
+
+	default O read(I input, InputStream is) {
+		throw new UnsupportedOperationException("Reading from InputStram is not supported in " + this.getPluginId() + " reader");
+	}
 
 }

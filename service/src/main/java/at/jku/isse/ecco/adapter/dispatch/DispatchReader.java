@@ -12,6 +12,7 @@ import com.google.inject.Inject;
 
 import javax.inject.Named;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.nio.file.*;
 import java.util.*;
@@ -261,6 +262,43 @@ public class DispatchReader implements ArtifactReader<Path, Set<Node.Op>> {
 		return nodes;
 	}
 
+	public Set<Node.Op> readSpecificFiles(Path base, Path path, InputStream content) {
+		long startTime = System.currentTimeMillis();
+
+		if (path.isAbsolute())
+			throw new EccoException("Path must be relative to base directory.");
+
+		if (Files.isDirectory(base.resolve(path))) {
+			throw new EccoException("Path must be a file.");
+		}
+
+		Map<Path, Node.Op> directoryNodes = new HashMap<>();
+
+		{
+			Path parent = path.getParent();
+			if (parent == null)
+				parent = Paths.get("");
+			Node.Op parentNode = this.createParents(base, parent, directoryNodes);
+
+			ArtifactReader<Path, Set<Node.Op>> reader = this.getReaderForFile(base, path);
+			if (reader == null)
+				throw new EccoException("No reader found for file " + path);
+			Set<Node.Op> nodes = reader.read(path, content);
+			if (!nodes.isEmpty()) {
+				for (Node.Op node : nodes) {
+					parentNode.addChild(node);
+				}
+			}
+		}
+
+		Set<Node.Op> nodes = new HashSet<>();
+		nodes.add(directoryNodes.get(Paths.get("")));
+
+		LOGGER.info(this.getClass() + ".readSpecificFiles(): " + (System.currentTimeMillis() - startTime) + "ms");
+
+		return nodes;
+	}
+
 	private Node.Op createParents(Path base, Path path, Map<Path, Node.Op> directoryNodes) {
 		// make sure that path is a directory
 		if (!Files.isDirectory(base.resolve(path)))
@@ -281,7 +319,11 @@ public class DispatchReader implements ArtifactReader<Path, Set<Node.Op>> {
 		// if the current path is still below the base directory
 		if (!relative.equals(Paths.get(""))) {
 			// proceed recursively with its parent and add it as a child to that parent
-			Node.Op parent = this.createParents(base, path.getParent(), directoryNodes);
+			Path pathParent = path.getParent();
+			if (pathParent == null) {
+				pathParent = Path.of("");
+			}
+			Node.Op parent = this.createParents(base, pathParent, directoryNodes);
 			parent.addChild(directoryNode);
 		}
 

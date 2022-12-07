@@ -1972,6 +1972,32 @@ public class EccoService implements ProgressInputStream.ProgressListener, Progre
             throw new EccoException("Error during map.", e);
         }
     }
+    public synchronized RootNode map(Path path, InputStream content) {
+        checkNotNull(path);
+
+        Set<Node.Op> nodes = this.reader.readSpecificFiles(this.baseDir, path, content);
+
+        RootNode.Op rootNode = this.entityFactory.createRootNode();
+        for (Node.Op node : nodes) {
+            rootNode.addChild(node);
+        }
+
+        try {
+            this.transactionStrategy.begin(TransactionStrategy.TRANSACTION.READ_ONLY);
+
+            Repository.Op repository = this.repositoryDao.load();
+
+            repository.map(rootNode);
+
+            this.transactionStrategy.end();
+
+            return rootNode;
+        } catch (Exception e) {
+            this.transactionStrategy.rollback();
+
+            throw new EccoException("Error during map.", e);
+        }
+    }
 
 
     // OTHERS //////////////////////////////////////////////////////////////////////////////////////////////////////////
