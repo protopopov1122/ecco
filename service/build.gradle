@@ -22,5 +22,7 @@ dependencies {
 	testImplementation project(':ecco-adapter-cpp')
 	testImplementation project(':ecco-adapter-runtime')
 	testImplementation project(':ecco-adapter-lilypond')
+//	testImplementation project(':ecco-adapter-java-proprietary')
+//	testImplementation project(':ecco-adapter-xml-proprietary')
 
 }
